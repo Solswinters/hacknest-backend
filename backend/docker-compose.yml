@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hacknest-backend
+    ports:
+      - '4000:4000'
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - MONGO_URI=mongodb://mongo:27017/hacknest
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret-change-me}
+      - JWT_EXP=7d
+      - ETH_PROVIDER_URL=${ETH_PROVIDER_URL:-https://rpc.base.org}
+      - CHAIN_ID=${CHAIN_ID:-8453}
+      - PRIVATE_KEY=${PRIVATE_KEY}
+      - EVENT_FACTORY_ADDRESS=${EVENT_FACTORY_ADDRESS}
+    depends_on:
+      - mongo
+    networks:
+      - hacknest-network
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    container_name: hacknest-mongo
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - hacknest-network
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+    driver: local
+
+networks:
+  hacknest-network:
+    driver: bridge
+
