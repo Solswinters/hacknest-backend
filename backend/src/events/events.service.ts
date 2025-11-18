@@ -136,5 +136,83 @@ export class EventsService {
     const event = await this.findById(eventId);
     return event.host === userAddress.toLowerCase();
   }
+
+  /**
+   * Invite/add judges to an event (only by host)
+   */
+  async inviteJudges(
+    eventId: string,
+    judgeAddresses: string[],
+    hostAddress: string,
+  ): Promise<EventDocument> {
+    const event = await this.findById(eventId);
+
+    // Verify the user is the host
+    if (event.host !== hostAddress.toLowerCase()) {
+      throw new ForbiddenException('Only the event host can invite judges');
+    }
+
+    // Normalize addresses and filter out duplicates
+    const normalizedAddresses = judgeAddresses.map((addr) => addr.toLowerCase());
+    const existingJudges = new Set(event.judges);
+    const newJudges = normalizedAddresses.filter((addr) => !existingJudges.has(addr));
+
+    if (newJudges.length === 0) {
+      this.logger.warn(`No new judges to add to event ${eventId}`);
+      return event;
+    }
+
+    // Add new judges to the event
+    event.judges = [...event.judges, ...newJudges];
+    const updatedEvent = await event.save();
+
+    this.logger.log(
+      `Added ${newJudges.length} judge(s) to event ${eventId}: ${newJudges.join(', ')}`,
+    );
+
+    return updatedEvent;
+  }
+
+  /**
+   * Remove a judge from an event (only by host)
+   */
+  async removeJudge(
+    eventId: string,
+    judgeAddress: string,
+    hostAddress: string,
+  ): Promise<EventDocument> {
+    const event = await this.findById(eventId);
+
+    // Verify the user is the host
+    if (event.host !== hostAddress.toLowerCase()) {
+      throw new ForbiddenException('Only the event host can remove judges');
+    }
+
+    const normalizedJudgeAddress = judgeAddress.toLowerCase();
+    const initialLength = event.judges.length;
+
+    // Remove the judge
+    event.judges = event.judges.filter((addr) => addr !== normalizedJudgeAddress);
+
+    if (event.judges.length === initialLength) {
+      this.logger.warn(
+        `Judge ${normalizedJudgeAddress} not found in event ${eventId}`,
+      );
+      return event;
+    }
+
+    const updatedEvent = await event.save();
+    this.logger.log(`Removed judge ${normalizedJudgeAddress} from event ${eventId}`);
+
+    return updatedEvent;
+  }
+
+  /**
+   * Get all judges for an event
+   */
+  async getJudges(eventId: string): Promise<string[]> {
+    const event = await this.findById(eventId);
+    return event.judges;
+  }
 }
 
