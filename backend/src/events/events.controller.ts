@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -17,6 +18,8 @@ import {
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { ListEventsDto } from './dto/list-events.dto';
+import { InviteJudgesDto } from './dto/invite-judges.dto';
+import { RemoveJudgeDto } from './dto/remove-judge.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -84,6 +87,85 @@ export class EventsController {
       judges: event.judges,
       status: event.status,
       createdAt: (event as any).createdAt,
+    };
+  }
+
+  @Post(':id/judges/invite')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.HOST)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Invite/add judges to an event (Host only)' })
+  @ApiParam({ name: 'id', description: 'Event ID' })
+  @ApiResponse({ status: 200, description: 'Judges invited successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only host can invite judges' })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async inviteJudges(
+    @Param('id') eventId: string,
+    @Body() inviteJudgesDto: InviteJudgesDto,
+    @CurrentUser('address') userAddress: string,
+  ) {
+    const event = await this.eventsService.inviteJudges(
+      eventId,
+      inviteJudgesDto.judges,
+      userAddress,
+    );
+
+    return {
+      success: true,
+      message: 'Judges invited successfully',
+      event: {
+        id: event._id,
+        judges: event.judges,
+      },
+    };
+  }
+
+  @Delete(':id/judges')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.HOST)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove a judge from an event (Host only)' })
+  @ApiParam({ name: 'id', description: 'Event ID' })
+  @ApiResponse({ status: 200, description: 'Judge removed successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only host can remove judges' })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async removeJudge(
+    @Param('id') eventId: string,
+    @Body() removeJudgeDto: RemoveJudgeDto,
+    @CurrentUser('address') userAddress: string,
+  ) {
+    const event = await this.eventsService.removeJudge(
+      eventId,
+      removeJudgeDto.judgeAddress,
+      userAddress,
+    );
+
+    return {
+      success: true,
+      message: 'Judge removed successfully',
+      event: {
+        id: event._id,
+        judges: event.judges,
+      },
+    };
+  }
+
+  @Get(':id/judges')
+  @ApiOperation({ summary: 'Get all judges for an event (Public)' })
+  @ApiParam({ name: 'id', description: 'Event ID' })
+  @ApiResponse({ status: 200, description: 'Judges list returned' })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async getJudges(@Param('id') eventId: string) {
+    const judges = await this.eventsService.getJudges(eventId);
+
+    return {
+      eventId,
+      judges,
+      count: judges.length,
     };
   }
 }
