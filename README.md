@@ -82,6 +82,7 @@ docker-compose up
 ## 📖 Documentation
 
 - **[Backend README](./backend/README.md)** - Complete backend setup and API documentation
+- **[Judge Management Guide](./backend/JUDGE_MANAGEMENT.md)** - Guide for inviting and managing judges
 - **[Implementation Summary](./IMPLEMENTATION_SUMMARY.md)** - Technical architecture and design decisions
 - **[API Documentation](http://localhost:4000/api/docs)** - Interactive Swagger docs (when running)
 
@@ -111,9 +112,12 @@ POST /api/auth/login                   # Login with signature
 
 ### Events
 ```http
-POST /api/events              # Create event (Host)
-GET  /api/events              # List events (Public)
-GET  /api/events/:id          # Event details (Public)
+POST   /api/events                          # Create event (Host)
+GET    /api/events                          # List events (Public)
+GET    /api/events/:id                      # Event details (Public)
+POST   /api/events/:id/judges/invite        # Invite judges (Host)
+DELETE /api/events/:id/judges               # Remove judge (Host)
+GET    /api/events/:id/judges               # List judges (Public)
 ```
 
 ### Submissions
