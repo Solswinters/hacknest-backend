@@ -18,7 +18,9 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "seed": "ts-node scripts/seed-dev.ts"
+    "seed": "ts-node scripts/seed-dev.ts",
+    "setup:escrow": "ts-node scripts/setup-escrow-wallet.ts",
+    "generate:wallet": "ts-node scripts/generate-wallet.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
