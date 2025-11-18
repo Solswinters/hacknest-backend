@@ -9,6 +9,7 @@ import { SubmissionsModule } from './submissions/submissions.module';
 import { JudgingModule } from './judging/judging.module';
 import { Web3Module } from './web3/web3.module';
 import { JobsModule } from './jobs/jobs.module';
+import { WalletModule } from './wallet/wallet.module';
 import { HealthController } from './common/controllers/health.controller';
 
 @Module({
@@ -31,6 +32,7 @@ import { HealthController } from './common/controllers/health.controller';
     JudgingModule,
     Web3Module,
     JobsModule,
+    WalletModule,
   ],
   controllers: [HealthController],
 })
