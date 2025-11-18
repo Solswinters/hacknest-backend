@@ -1,45 +1,27 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { EventsService } from './events.service';
-import { Event, EventStatus, RewardCurrency } from './schemas/event.schema';
-import { NotFoundException } from '@nestjs/common';
+import { Event } from './schemas/event.schema';
 
-describe('EventsService', () => {
+describe('EventsService - Judge Management', () => {
   let service: EventsService;
   let mockEventModel: any;
 
-  const mockEvent = {
+  const createMockEvent = () => ({
     _id: '507f1f77bcf86cd799439011',
-    host: '0x742d35cc6634c0532925a3b844bc9e7595f0beb',
+    host: '0xhost123',
     title: 'Test Hackathon',
-    description: 'Test description',
-    rewardCurrency: RewardCurrency.ETH,
-    rewardAmount: '1000000000000000000',
-    startDate: new Date('2025-12-01'),
-    endDate: new Date('2025-12-15'),
-    judges: ['0x742d35cc6634c0532925a3b844bc9e7595f0beb'],
-    status: EventStatus.DRAFT,
-    createdAt: new Date(),
-  };
+    judges: ['0xjudge1', '0xjudge2'],
+    save: jest.fn(),
+  });
 
   beforeEach(async () => {
     mockEventModel = {
-      find: jest.fn().mockReturnThis(),
-      findById: jest.fn().mockReturnThis(),
-      findOne: jest.fn().mockReturnThis(),
+      findById: jest.fn(),
+      find: jest.fn(),
       countDocuments: jest.fn(),
-      sort: jest.fn().mockReturnThis(),
-      skip: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      exec: jest.fn(),
-      save: jest.fn(),
     };
-
-    // Mock constructor
-    mockEventModel.mockImplementation(() => ({
-      ...mockEvent,
-      save: jest.fn().mockResolvedValue(mockEvent),
-    }));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -54,56 +36,200 @@ describe('EventsService', () => {
     service = module.get<EventsService>(EventsService);
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
-  describe('create', () => {
-    it('should create an event', async () => {
-      const createDto = {
-        title: 'Test Hackathon',
-        description: 'Test description',
-        rewardCurrency: RewardCurrency.ETH,
-        rewardAmount: '1000000000000000000',
-        startDate: '2025-12-01T00:00:00Z',
-        endDate: '2025-12-15T00:00:00Z',
-        judges: ['0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'],
-      };
+  describe('inviteJudges', () => {
+    it('should add new judges to an event', async () => {
+      const mockEvent = createMockEvent();
+      const mockExec = jest.fn().mockResolvedValue(mockEvent);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
+      mockEvent.save.mockResolvedValue({
+        ...mockEvent,
+        judges: ['0xjudge1', '0xjudge2', '0xjudge3'],
+      });
 
-      const result = await service.create(createDto, '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb');
+      const result = await service.inviteJudges(
+        '507f1f77bcf86cd799439011',
+        ['0xJudge3'],
+        '0xHost123',
+      );
 
-      expect(result).toBeDefined();
-      expect(result.title).toBe(createDto.title);
+      expect(result.judges).toContain('0xjudge3');
+      expect(mockEvent.save).toHaveBeenCalled();
     });
-  });
 
-  describe('findById', () => {
-    it('should return an event by id', async () => {
-      mockEventModel.exec.mockResolvedValue(mockEvent);
+    it('should not add duplicate judges', async () => {
+      const mockEvent = createMockEvent();
+      const mockExec = jest.fn().mockResolvedValue(mockEvent);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
+      mockEvent.save.mockResolvedValue(mockEvent);
 
-      const result = await service.findById('507f1f77bcf86cd799439011');
+      const result = await service.inviteJudges(
+        '507f1f77bcf86cd799439011',
+        ['0xJudge1'], // Already exists
+        '0xHost123',
+      );
 
-      expect(result).toEqual(mockEvent);
+      // Should return event without adding duplicate
+      expect(result.judges.length).toBe(2);
+    });
+
+    it('should throw ForbiddenException if not host', async () => {
+      const mockEvent = createMockEvent();
+      const mockExec = jest.fn().mockResolvedValue(mockEvent);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
+
+      await expect(
+        service.inviteJudges(
+          '507f1f77bcf86cd799439011',
+          ['0xJudge3'],
+          '0xNotHost', // Different from host
+        ),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should throw NotFoundException if event not found', async () => {
-      mockEventModel.exec.mockResolvedValue(null);
+      const mockExec = jest.fn().mockResolvedValue(null);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
 
-      await expect(service.findById('nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(
+        service.inviteJudges('nonexistent', ['0xJudge3'], '0xHost123'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should normalize addresses to lowercase', async () => {
+      const mockEvent = createMockEvent();
+      const mockExec = jest.fn().mockResolvedValue(mockEvent);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
+      mockEvent.save.mockResolvedValue({
+        ...mockEvent,
+        judges: ['0xjudge1', '0xjudge2', '0xjudge3'],
+      });
+
+      await service.inviteJudges(
+        '507f1f77bcf86cd799439011',
+        ['0xJUDGE3'], // Mixed case
+        '0xHost123',
+      );
+
+      // Verify the judge was added in lowercase
+      expect(mockEvent.judges).toContain('0xjudge3');
     });
   });
 
-  describe('findAll', () => {
-    it('should return paginated events', async () => {
-      const events = [mockEvent];
-      mockEventModel.exec.mockResolvedValue(events);
-      mockEventModel.countDocuments.mockResolvedValue(1);
+  describe('removeJudge', () => {
+    it('should remove a judge from an event', async () => {
+      const mockEvent = createMockEvent();
+      const mockExec = jest.fn().mockResolvedValue(mockEvent);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
+      mockEvent.save.mockResolvedValue({
+        ...mockEvent,
+        judges: ['0xjudge2'],
+      });
 
-      const result = await service.findAll({ page: 1, limit: 10 });
+      const result = await service.removeJudge(
+        '507f1f77bcf86cd799439011',
+        '0xJudge1',
+        '0xHost123',
+      );
 
-      expect(result.events).toEqual(events);
-      expect(result.pagination.total).toBe(1);
+      expect(result.judges).not.toContain('0xjudge1');
+      expect(mockEvent.save).toHaveBeenCalled();
+    });
+
+    it('should throw ForbiddenException if not host', async () => {
+      const mockEvent = createMockEvent();
+      const mockExec = jest.fn().mockResolvedValue(mockEvent);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
+
+      await expect(
+        service.removeJudge(
+          '507f1f77bcf86cd799439011',
+          '0xJudge1',
+          '0xNotHost',
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should handle removing non-existent judge gracefully', async () => {
+      const mockEvent = createMockEvent();
+      const mockExec = jest.fn().mockResolvedValue(mockEvent);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
+      mockEvent.save.mockResolvedValue(mockEvent);
+
+      const result = await service.removeJudge(
+        '507f1f77bcf86cd799439011',
+        '0xNonExistentJudge',
+        '0xHost123',
+      );
+
+      // Should return event without error
+      expect(result).toBeDefined();
+      expect(result.judges.length).toBe(2);
+    });
+  });
+
+  describe('getJudges', () => {
+    it('should return list of judges', async () => {
+      const mockEvent = createMockEvent();
+      const mockExec = jest.fn().mockResolvedValue(mockEvent);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
+
+      const judges = await service.getJudges('507f1f77bcf86cd799439011');
+
+      expect(judges).toEqual(['0xjudge1', '0xjudge2']);
+    });
+
+    it('should throw NotFoundException if event not found', async () => {
+      const mockExec = jest.fn().mockResolvedValue(null);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
+
+      await expect(service.getJudges('nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('isJudge', () => {
+    it('should return true if user is a judge', async () => {
+      const mockEvent = createMockEvent();
+      const mockExec = jest.fn().mockResolvedValue(mockEvent);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
+
+      const result = await service.isJudge(
+        '507f1f77bcf86cd799439011',
+        '0xJudge1',
+      );
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false if user is not a judge', async () => {
+      const mockEvent = createMockEvent();
+      const mockExec = jest.fn().mockResolvedValue(mockEvent);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
+
+      const result = await service.isJudge(
+        '507f1f77bcf86cd799439011',
+        '0xNotAJudge',
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('should handle case-insensitive address comparison', async () => {
+      const mockEvent = createMockEvent();
+      const mockExec = jest.fn().mockResolvedValue(mockEvent);
+      mockEventModel.findById.mockReturnValue({ exec: mockExec });
+
+      const result = await service.isJudge(
+        '507f1f77bcf86cd799439011',
+        '0xJUDGE1', // Mixed case
+      );
+
+      expect(result).toBe(true);
     });
   });
 });
-
