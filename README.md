@@ -83,6 +83,8 @@ docker-compose up
 
 - **[Backend README](./backend/README.md)** - Complete backend setup and API documentation
 - **[Judge Management Guide](./backend/JUDGE_MANAGEMENT.md)** - Guide for inviting and managing judges
+- **[WalletConnect Integration](./backend/WALLETCONNECT_INTEGRATION.md)** - Frontend WalletConnect setup guide
+- **[WalletConnect Backend](./backend/WALLETCONNECT_BACKEND_GUIDE.md)** - Backend session management & monitoring
 - **[Implementation Summary](./IMPLEMENTATION_SUMMARY.md)** - Technical architecture and design decisions
 - **[API Documentation](http://localhost:4000/api/docs)** - Interactive Swagger docs (when running)
 
