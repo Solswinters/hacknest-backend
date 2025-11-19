@@ -31,6 +31,9 @@
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.3.0",
     "@nestjs/swagger": "^7.1.17",
+    "@walletconnect/sign-client": "^2.23.0",
+    "@walletconnect/types": "^2.23.0",
+    "@walletconnect/utils": "^2.23.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
     "ethers": "^5.7.2",
@@ -82,4 +85,3 @@
     "testEnvironment": "node"
   }
 }
-
