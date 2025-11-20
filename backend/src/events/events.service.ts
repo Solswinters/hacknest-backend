@@ -412,5 +412,179 @@ export class EventsService {
       .limit(limit)
       .exec();
   }
+
+  /**
+   * Get event statistics
+   */
+  async getEventStatistics(eventId: string) {
+    return this.getEventStats(eventId);
+  }
+
+  /**
+   * Get upcoming events
+   */
+  async getUpcomingEvents(limit = 10): Promise<EventDocument[]> {
+    return this.findUpcoming(limit);
+  }
+
+  /**
+   * Get past events
+   */
+  async getPastEvents(limit = 10): Promise<EventDocument[]> {
+    return this.findRecentlyEnded(limit);
+  }
+
+  /**
+   * Get events by user (hosted or judging)
+   */
+  async getEventsByUser(userAddress: string): Promise<EventDocument[]> {
+    const normalizedAddress = userAddress.toLowerCase();
+    
+    const events = await this.eventModel
+      .find({
+        $or: [
+          { host: normalizedAddress },
+          { judges: normalizedAddress },
+          { participants: normalizedAddress },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    return events;
+  }
+
+  /**
+   * Add participant to event
+   */
+  async addParticipant(eventId: string, participantAddress: string): Promise<EventDocument> {
+    const event = await this.findById(eventId);
+    const normalizedAddress = participantAddress.toLowerCase();
+
+    // Initialize participants array if it doesn't exist
+    if (!event.participants) {
+      event.participants = [];
+    }
+
+    // Check if already registered
+    if (event.participants.includes(normalizedAddress)) {
+      this.logger.warn(`Participant ${normalizedAddress} already registered for event ${eventId}`);
+      return event;
+    }
+
+    // Check if registration is open
+    const now = new Date();
+    if (event.status !== EventStatus.ACTIVE || now > new Date(event.endDate)) {
+      throw new ForbiddenException('Registration is closed for this event');
+    }
+
+    event.participants.push(normalizedAddress);
+    const updatedEvent = await event.save();
+    
+    this.logger.log(`Added participant ${normalizedAddress} to event ${eventId}`);
+    return updatedEvent;
+  }
+
+  /**
+   * Remove participant from event
+   */
+  async removeParticipant(
+    eventId: string,
+    participantAddress: string,
+    hostAddress: string,
+  ): Promise<EventDocument> {
+    const event = await this.findById(eventId);
+
+    if (event.host !== hostAddress.toLowerCase()) {
+      throw new ForbiddenException('Only the event host can remove participants');
+    }
+
+    const normalizedAddress = participantAddress.toLowerCase();
+    
+    if (!event.participants) {
+      event.participants = [];
+    }
+
+    const initialLength = event.participants.length;
+    event.participants = event.participants.filter((addr) => addr !== normalizedAddress);
+
+    if (event.participants.length === initialLength) {
+      this.logger.warn(`Participant ${normalizedAddress} not found in event ${eventId}`);
+      return event;
+    }
+
+    const updatedEvent = await event.save();
+    this.logger.log(`Removed participant ${normalizedAddress} from event ${eventId}`);
+    
+    return updatedEvent;
+  }
+
+  /**
+   * Get all participants for an event
+   */
+  async getParticipants(eventId: string): Promise<string[]> {
+    const event = await this.findById(eventId);
+    return event.participants || [];
+  }
+
+  /**
+   * Publish event results
+   */
+  async publishResults(eventId: string, hostAddress: string): Promise<EventDocument> {
+    const event = await this.findById(eventId);
+
+    if (event.host !== hostAddress.toLowerCase()) {
+      throw new ForbiddenException('Only the event host can publish results');
+    }
+
+    if (event.status !== EventStatus.ACTIVE) {
+      throw new ForbiddenException('Event must be active to publish results');
+    }
+
+    event.status = EventStatus.COMPLETED;
+    const updatedEvent = await event.save();
+    
+    this.logger.log(`Published results for event ${eventId}`);
+    return updatedEvent;
+  }
+
+  /**
+   * Close registration for event
+   */
+  async closeRegistration(eventId: string, hostAddress: string): Promise<EventDocument> {
+    const event = await this.findById(eventId);
+
+    if (event.host !== hostAddress.toLowerCase()) {
+      throw new ForbiddenException('Only the event host can close registration');
+    }
+
+    // Add registrationOpen field to event schema if needed
+    (event as any).registrationOpen = false;
+    
+    const updatedEvent = await event.save();
+    this.logger.log(`Closed registration for event ${eventId}`);
+    
+    return updatedEvent;
+  }
+
+  /**
+   * Search events by title or description
+   */
+  async searchEvents(query: string, limit = 10): Promise<EventDocument[]> {
+    const searchRegex = new RegExp(query, 'i');
+    
+    const events = await this.eventModel
+      .find({
+        $or: [
+          { title: searchRegex },
+          { description: searchRegex },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .exec();
+
+    return events;
+  }
 }
 
