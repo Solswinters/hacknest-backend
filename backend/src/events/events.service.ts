@@ -214,5 +214,203 @@ export class EventsService {
     const event = await this.findById(eventId);
     return event.judges;
   }
+
+  /**
+   * Find events hosted by a specific address
+   */
+  async findByHost(hostAddress: string, page = 1, limit = 10): Promise<{
+    events: EventDocument[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }> {
+    const normalizedAddress = hostAddress.toLowerCase();
+    const skip = (page - 1) * limit;
+
+    const [events, total] = await Promise.all([
+      this.eventModel
+        .find({ host: normalizedAddress })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.eventModel.countDocuments({ host: normalizedAddress }),
+    ]);
+
+    return {
+      events,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Find events where user is a judge
+   */
+  async findByJudge(judgeAddress: string, page = 1, limit = 10): Promise<{
+    events: EventDocument[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }> {
+    const normalizedAddress = judgeAddress.toLowerCase();
+    const skip = (page - 1) * limit;
+
+    const [events, total] = await Promise.all([
+      this.eventModel
+        .find({ judges: normalizedAddress })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.eventModel.countDocuments({ judges: normalizedAddress }),
+    ]);
+
+    return {
+      events,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Get event statistics
+   */
+  async getEventStats(eventId: string): Promise<{
+    totalSubmissions: number;
+    totalJudges: number;
+    isActive: boolean;
+    daysRemaining: number;
+  }> {
+    const event = await this.findById(eventId);
+    const now = new Date();
+    const endDate = new Date(event.endDate);
+    const daysRemaining = Math.max(
+      0,
+      Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+    );
+
+    return {
+      totalSubmissions: 0, // Would need to query submissions collection
+      totalJudges: event.judges.length,
+      isActive: event.status === EventStatus.ACTIVE,
+      daysRemaining,
+    };
+  }
+
+  /**
+   * Find active events
+   */
+  async findActiveEvents(page = 1, limit = 10): Promise<{
+    events: EventDocument[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }> {
+    const skip = (page - 1) * limit;
+
+    const [events, total] = await Promise.all([
+      this.eventModel
+        .find({ status: EventStatus.ACTIVE })
+        .sort({ endDate: 1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.eventModel.countDocuments({ status: EventStatus.ACTIVE }),
+    ]);
+
+    return {
+      events,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Delete an event (only by host)
+   */
+  async delete(eventId: string, hostAddress: string): Promise<void> {
+    const event = await this.findById(eventId);
+
+    if (event.host !== hostAddress.toLowerCase()) {
+      throw new ForbiddenException('Only the event host can delete this event');
+    }
+
+    await this.eventModel.deleteOne({ _id: eventId });
+    this.logger.log(`Event deleted: ${eventId} by ${hostAddress}`);
+  }
+
+  /**
+   * Check if event is active and open for submissions
+   */
+  async isOpenForSubmissions(eventId: string): Promise<boolean> {
+    const event = await this.findById(eventId);
+    const now = new Date();
+    const startDate = new Date(event.startDate);
+    const endDate = new Date(event.endDate);
+
+    return (
+      event.status === EventStatus.ACTIVE &&
+      now >= startDate &&
+      now <= endDate
+    );
+  }
+
+  /**
+   * Get total count of events
+   */
+  async getTotalCount(): Promise<number> {
+    return this.eventModel.countDocuments();
+  }
+
+  /**
+   * Find upcoming events
+   */
+  async findUpcoming(limit = 10): Promise<EventDocument[]> {
+    const now = new Date();
+
+    return this.eventModel
+      .find({
+        status: EventStatus.ACTIVE,
+        startDate: { $gt: now },
+      })
+      .sort({ startDate: 1 })
+      .limit(limit)
+      .exec();
+  }
+
+  /**
+   * Find recently ended events
+   */
+  async findRecentlyEnded(limit = 10): Promise<EventDocument[]> {
+    return this.eventModel
+      .find({
+        status: { $in: [EventStatus.COMPLETED, EventStatus.CANCELLED] },
+      })
+      .sort({ endDate: -1 })
+      .limit(limit)
+      .exec();
+  }
 }
 
