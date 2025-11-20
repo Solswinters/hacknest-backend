@@ -87,5 +87,107 @@ export class UsersService {
     this.logger.log(`User role updated: ${normalizedAddress} -> ${role}`);
     return user;
   }
+
+  /**
+   * Get user statistics
+   */
+  async getUserStats(address: string): Promise<{
+    eventsHosted: number
+    eventsJudged: number
+    submissionsCount: number
+  }> {
+    const normalizedAddress = address.toLowerCase();
+    const user = await this.findByAddress(normalizedAddress);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // These would be populated from other collections
+    // Placeholder implementation
+    return {
+      eventsHosted: 0,
+      eventsJudged: 0,
+      submissionsCount: 0,
+    };
+  }
+
+  /**
+   * Check if user exists
+   */
+  async exists(address: string): Promise<boolean> {
+    const normalizedAddress = address.toLowerCase();
+    const count = await this.userModel.countDocuments({ address: normalizedAddress });
+    return count > 0;
+  }
+
+  /**
+   * Get all users with pagination
+   */
+  async findAll(page = 1, limit = 10): Promise<{
+    users: UserDocument[]
+    total: number
+    page: number
+    totalPages: number
+  }> {
+    const skip = (page - 1) * limit;
+
+    const [users, total] = await Promise.all([
+      this.userModel
+        .find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.userModel.countDocuments(),
+    ]);
+
+    return {
+      users,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Find users by role
+   */
+  async findByRole(role: UserRole): Promise<UserDocument[]> {
+    return this.userModel.find({ role }).exec();
+  }
+
+  /**
+   * Delete user account
+   */
+  async deleteUser(address: string): Promise<void> {
+    const normalizedAddress = address.toLowerCase();
+    
+    const result = await this.userModel.deleteOne({ address: normalizedAddress });
+
+    if (result.deletedCount === 0) {
+      throw new NotFoundException('User not found');
+    }
+
+    this.logger.log(`User deleted: ${normalizedAddress}`);
+  }
+
+  /**
+   * Get total user count
+   */
+  async getTotalCount(): Promise<number> {
+    return this.userModel.countDocuments();
+  }
+
+  /**
+   * Get recent users
+   */
+  async getRecentUsers(limit = 10): Promise<UserDocument[]> {
+    return this.userModel
+      .find()
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .exec();
+  }
 }
 
