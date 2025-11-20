@@ -13,8 +13,111 @@ Hacknest enables communities to host hackathons and grant programs with wallet-b
 - 📝 **Verified Submissions** - Signature-verified project submissions
 - ⚖️ **Judging System** - Role-based scoring and winner selection
 - 💰 **On-Chain Payouts** - Automated prize distribution via smart contracts
-- 🔒 **Security First** - Role-based access control, input validation, audit logging
+- 🔒 **Multi-Sig Escrow** - Secure prize pool management with multi-signature approvals
+- 🔐 **Security First** - Role-based access control, input validation, audit logging
 - 📚 **API Documentation** - Auto-generated Swagger/OpenAPI docs
+
+## 💎 Smart Contract - PrizePoolEscrow
+
+**Network**: Base (Chain ID: 8453)  
+**Contract Address**: `0xFe3989D74711b1dda30cf4a52F3DE14392185097`  
+**Block Explorer**: [View on BaseScan](https://basescan.org/address/0xFe3989D74711b1dda30cf4a52F3DE14392185097)
+
+### Features
+
+- 🔐 **Multi-Signature Security** - Requires multiple judge approvals for payouts (minimum 2 signatures)
+- 💰 **Dual Token Support** - Works with native ETH and ERC20 tokens
+- 🎭 **Role-Based Access** - HOST_ROLE, JUDGE_ROLE, and ADMIN_ROLE separation
+- 🔒 **ReentrancyGuard** - Protection against reentrancy attacks
+- ⏰ **Emergency Timelock** - 7-day delay on emergency withdrawals
+- 🛑 **Pausable** - Can be paused in emergency situations
+- 📦 **Batch Payouts** - Distribute prizes to up to 50 winners at once
+- 💳 **Refund Mechanism** - Hosts can refund pools if no payouts are made
+
+### Pool Management
+
+**Create Prize Pool**:
+```typescript
+import { PRIZE_POOL_ESCROW_ADDRESS, PRIZE_POOL_ESCROW_ABI } from './abi';
+
+// Create pool with native ETH
+const poolId = await contract.createPrizePool(
+  eventId,
+  '0x0000000000000000000000000000000000000000', // address(0) for ETH
+  2, // required signatures
+  { value: prizeAmount }
+);
+
+// Create pool with ERC20 token
+const poolId = await contract.createPrizePool(
+  eventId,
+  tokenAddress,
+  3 // required signatures
+);
+```
+
+**Request Payout**:
+```typescript
+const payoutId = await contract.requestPayout(
+  poolId,
+  [winner1, winner2, winner3], // recipient addresses
+  [amount1, amount2, amount3],  // prize amounts
+  "Hackathon Winners - Round 1"
+);
+```
+
+**Approve Payout** (Judge):
+```typescript
+// Judges approve the payout
+await contract.approvePayout(payoutId);
+// Auto-executes when required signatures are reached
+```
+
+### Pool Status States
+
+- **Active** (0) - Pool is open for funding and payouts
+- **Locked** (1) - Pool is locked, no new funding allowed
+- **Completed** (2) - All funds distributed
+- **Cancelled** (3) - Pool cancelled or emergency withdrawn
+
+### Payout Status States
+
+- **Pending** (0) - Awaiting judge approvals
+- **Approved** (1) - Approved but not executed
+- **Executed** (2) - Successfully paid out
+- **Rejected** (3) - Rejected by admin
+
+### Security Features
+
+✅ **Multi-Sig Required**: Minimum 2 signatures needed for payouts  
+✅ **Role Separation**: Host creates pools, Judges approve, Admins manage  
+✅ **Time-Locked Emergency**: 7-day delay on emergency withdrawals  
+✅ **Refund Protection**: Only refundable if no payouts have been made  
+✅ **Batch Size Limit**: Maximum 50 recipients per payout  
+✅ **Comprehensive Events**: Full audit trail for all operations
+
+### Integration
+
+```typescript
+import { 
+  PRIZE_POOL_ESCROW_ADDRESS, 
+  PRIZE_POOL_ESCROW_ABI,
+  PoolStatus,
+  PayoutStatus,
+  ROLES,
+  CONTRACT_CONSTANTS
+} from './abi';
+
+// View pool details
+const poolDetails = await contract.getPoolDetails(poolId);
+console.log(`Remaining: ${poolDetails.remainingAmount}`);
+console.log(`Status: ${PoolStatus[poolDetails.status]}`);
+
+// View event winners
+const winners = await contract.getEventWinners(eventId);
+```
+
+See [`abi.ts`](./abi.ts) for complete contract ABI and configuration.
 
 ## 🏗️ Repository Structure
 
