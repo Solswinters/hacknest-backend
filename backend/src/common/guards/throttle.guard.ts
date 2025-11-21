@@ -1,103 +1,91 @@
-import {
-  Injectable,
-  CanActivate,
-  ExecutionContext,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
-interface ThrottleConfig {
-  limit: number;
-  ttl: number; // Time to live in seconds
+export const THROTTLE_KEY = 'throttle';
+
+export interface ThrottleOptions {
+  limit: number; // Max requests
+  ttl: number; // Time window in seconds
 }
 
+/**
+ * Guard to throttle requests based on IP address
+ * Prevents abuse by limiting request rate
+ */
 @Injectable()
 export class ThrottleGuard implements CanActivate {
-  private readonly requestCounts: Map<
-    string,
-    { count: number; resetTime: number }
-  > = new Map();
+  private requests: Map<string, number[]> = new Map();
 
-  constructor(private reflector: Reflector) {
-    // Clean up expired entries every minute
-    setInterval(() => this.cleanup(), 60000);
-  }
+  constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const throttleConfig = this.reflector.getAllAndOverride<ThrottleConfig>(
-      'throttle',
-      [context.getHandler(), context.getClass()]
-    );
+    const throttle = this.reflector.get<ThrottleOptions>(THROTTLE_KEY, context.getHandler());
 
-    if (!throttleConfig) {
+    if (!throttle) {
       return true;
     }
 
     const request = context.switchToHttp().getRequest();
-    const identifier = this.getIdentifier(request);
+    const ip = this.getClientIp(request);
     const now = Date.now();
+    const windowStart = now - throttle.ttl * 1000;
 
-    let record = this.requestCounts.get(identifier);
+    // Get or initialize request history for this IP
+    let requestTimes = this.requests.get(ip) || [];
 
-    if (!record || now > record.resetTime) {
-      // Create new record
-      record = {
-        count: 1,
-        resetTime: now + throttleConfig.ttl * 1000,
-      };
-      this.requestCounts.set(identifier, record);
-      return true;
-    }
+    // Filter out requests outside the time window
+    requestTimes = requestTimes.filter((time) => time > windowStart);
 
-    if (record.count >= throttleConfig.limit) {
-      const remainingTime = Math.ceil((record.resetTime - now) / 1000);
+    // Check if limit exceeded
+    if (requestTimes.length >= throttle.limit) {
+      const oldestRequest = requestTimes[0];
+      const retryAfter = Math.ceil((oldestRequest + throttle.ttl * 1000 - now) / 1000);
+
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: 'Too many requests',
-          retryAfter: remainingTime,
+          retryAfter,
         },
-        HttpStatus.TOO_MANY_REQUESTS
+        HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 
-    record.count++;
+    // Add current request
+    requestTimes.push(now);
+    this.requests.set(ip, requestTimes);
+
     return true;
   }
 
-  private getIdentifier(request: any): string {
-    // Use user ID if authenticated, otherwise use IP address
-    const userId = request.user?.id;
-    const ip =
-      request.ip ||
-      request.headers['x-forwarded-for'] ||
-      request.connection.remoteAddress;
-
-    return userId || ip;
+  /**
+   * Get client IP address
+   */
+  private getClientIp(request: any): string {
+    return (
+      request.headers['x-forwarded-for']?.split(',')[0] ||
+      request.headers['x-real-ip'] ||
+      request.connection?.remoteAddress ||
+      request.socket?.remoteAddress ||
+      'unknown'
+    );
   }
 
-  private cleanup(): void {
+  /**
+   * Clean up old entries periodically
+   */
+  cleanup(): void {
     const now = Date.now();
+    const maxAge = 3600000; // 1 hour
 
-    for (const [key, record] of this.requestCounts.entries()) {
-      if (now > record.resetTime) {
-        this.requestCounts.delete(key);
+    for (const [ip, times] of this.requests.entries()) {
+      const recentTimes = times.filter((time) => time > now - maxAge);
+
+      if (recentTimes.length === 0) {
+        this.requests.delete(ip);
+      } else {
+        this.requests.set(ip, recentTimes);
       }
     }
   }
-
-  // Method to manually reset rate limit for a user
-  reset(identifier: string): void {
-    this.requestCounts.delete(identifier);
-  }
-
-  // Method to get current count for a user
-  getCount(identifier: string): number {
-    const record = this.requestCounts.get(identifier);
-    return record ? record.count : 0;
-  }
 }
-
-export default ThrottleGuard;
-
