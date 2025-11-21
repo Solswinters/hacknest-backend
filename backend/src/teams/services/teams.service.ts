@@ -1,456 +1,357 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Team, TeamDocument } from '../schemas/team.schema';
-
-export interface CreateTeamDto {
-  name: string;
-  description?: string;
-  eventId?: string;
-  logo?: string;
-  tags?: string[];
-}
-
-export interface UpdateTeamDto {
-  name?: string;
-  description?: string;
-  logo?: string;
-  tags?: string[];
-}
-
-export interface TeamStats {
-  totalTeams: number;
-  activeTeams: number;
-  averageTeamSize: number;
-  topTeams: Array<{ teamId: string; name: string; memberCount: number }>;
-}
+import { Team, TeamDocument, TeamMember, TeamInvitation } from '../schemas/team.schema';
+import { CreateTeamDto, UpdateTeamDto, TeamResponseDto } from '../dto/team.dto';
+import { PaginationDto } from '../../common/dto/pagination.dto';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class TeamsService {
   private readonly logger = new Logger(TeamsService.name);
 
   constructor(
-    @InjectModel(Team.name) private teamModel: Model<TeamDocument>,
+    @InjectModel(Team.name)
+    private teamModel: Model<TeamDocument>,
   ) {}
 
   /**
    * Create a new team
    */
-  async create(createTeamDto: CreateTeamDto, leaderAddress: string): Promise<TeamDocument> {
+  async createTeam(userId: string, createTeamDto: CreateTeamDto): Promise<TeamResponseDto> {
+    this.logger.log(`Creating team: ${createTeamDto.name} by user ${userId}`);
+
+    // Check if team with same name exists for this event
+    const existing = await this.teamModel
+      .findOne({ eventId: createTeamDto.eventId, name: createTeamDto.name })
+      .exec();
+
+    if (existing) {
+      throw new BadRequestException('Team with this name already exists for this event');
+    }
+
+    const ownerMember: TeamMember = {
+      userId,
+      role: 'owner',
+      joinedAt: new Date(),
+    };
+
     const team = new this.teamModel({
       ...createTeamDto,
-      leader: leaderAddress.toLowerCase(),
-      members: [leaderAddress.toLowerCase()],
-      isActive: true,
-      stats: {
-        totalSubmissions: 0,
-        totalWins: 0,
-        totalParticipations: 0,
-        averageScore: 0,
-      },
+      ownerId: userId,
+      members: [ownerMember],
+      invitations: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
 
-    const savedTeam = await team.save();
-    this.logger.log(`Team created: ${savedTeam._id} by ${leaderAddress}`);
-    
-    return savedTeam;
+    const saved = await team.save();
+    return this.mapToResponseDto(saved);
   }
 
   /**
-   * Find team by ID
+   * Find all teams with pagination and filtering
    */
-  async findById(teamId: string): Promise<TeamDocument> {
+  async findAllTeams(
+    paginationDto: PaginationDto,
+    search?: string,
+    eventId?: string,
+    memberId?: string,
+  ): Promise<{ data: TeamResponseDto[]; total: number }> {
+    const { page = 0, limit = 10 } = paginationDto;
+
+    const query: any = {};
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    if (eventId) {
+      query.eventId = eventId;
+    }
+
+    if (memberId) {
+      query['members.userId'] = memberId;
+    }
+
+    const [teams, total] = await Promise.all([
+      this.teamModel
+        .find(query)
+        .skip(page * limit)
+        .limit(limit)
+        .sort({ createdAt: -1 })
+        .exec(),
+      this.teamModel.countDocuments(query).exec(),
+    ]);
+
+    return {
+      data: teams.map((team) => this.mapToResponseDto(team)),
+      total,
+    };
+  }
+
+  /**
+   * Find a team by ID
+   */
+  async findTeamById(id: string): Promise<TeamResponseDto> {
+    const team = await this.teamModel.findById(id).exec();
+
+    if (!team) {
+      throw new NotFoundException(`Team with ID ${id} not found`);
+    }
+
+    return this.mapToResponseDto(team);
+  }
+
+  /**
+   * Update a team
+   */
+  async updateTeam(userId: string, id: string, updateTeamDto: UpdateTeamDto): Promise<TeamResponseDto> {
+    this.logger.log(`Updating team: ${id} by user ${userId}`);
+
+    const team = await this.teamModel.findById(id).exec();
+
+    if (!team) {
+      throw new NotFoundException(`Team with ID ${id} not found`);
+    }
+
+    // Check if user is the owner
+    if (team.ownerId !== userId) {
+      throw new ForbiddenException('Only the team owner can update the team');
+    }
+
+    Object.assign(team, updateTeamDto);
+    team.updatedAt = new Date();
+
+    const updated = await team.save();
+    return this.mapToResponseDto(updated);
+  }
+
+  /**
+   * Delete a team
+   */
+  async deleteTeam(userId: string, id: string): Promise<void> {
+    this.logger.log(`Deleting team: ${id} by user ${userId}`);
+
+    const team = await this.teamModel.findById(id).exec();
+
+    if (!team) {
+      throw new NotFoundException(`Team with ID ${id} not found`);
+    }
+
+    // Check if user is the owner
+    if (team.ownerId !== userId) {
+      throw new ForbiddenException('Only the team owner can delete the team');
+    }
+
+    await this.teamModel.deleteOne({ _id: id }).exec();
+  }
+
+  /**
+   * Invite a member to the team
+   */
+  async inviteMember(ownerId: string, teamId: string, userId: string): Promise<TeamResponseDto> {
+    this.logger.log(`Inviting user ${userId} to team ${teamId}`);
+
     const team = await this.teamModel.findById(teamId).exec();
 
     if (!team) {
       throw new NotFoundException(`Team with ID ${teamId} not found`);
     }
 
-    return team;
-  }
-
-  /**
-   * Find all teams
-   */
-  async findAll(filters?: {
-    isActive?: boolean;
-    eventId?: string;
-    tag?: string;
-  }): Promise<TeamDocument[]> {
-    const query: any = {};
-
-    if (filters) {
-      if (filters.isActive !== undefined) {
-        query.isActive = filters.isActive;
-      }
-      if (filters.eventId) {
-        query.eventId = filters.eventId;
-      }
-      if (filters.tag) {
-        query.tags = filters.tag;
-      }
+    // Check if user is the owner
+    if (team.ownerId !== ownerId) {
+      throw new ForbiddenException('Only the team owner can invite members');
     }
 
-    return this.teamModel.find(query).sort({ createdAt: -1 }).exec();
-  }
-
-  /**
-   * Update team
-   */
-  async update(
-    teamId: string,
-    updateTeamDto: UpdateTeamDto,
-    userAddress: string,
-  ): Promise<TeamDocument> {
-    const team = await this.findById(teamId);
-
-    // Verify user is the leader
-    if (team.leader !== userAddress.toLowerCase()) {
-      throw new ForbiddenException('Only the team leader can update the team');
+    // Check if user is already a member
+    if (team.members.some((m) => m.userId === userId)) {
+      throw new BadRequestException('User is already a member of this team');
     }
 
-    Object.assign(team, updateTeamDto);
-    
-    const updatedTeam = await team.save();
-    this.logger.log(`Team updated: ${teamId} by ${userAddress}`);
-    
-    return updatedTeam;
-  }
-
-  /**
-   * Add member to team
-   */
-  async addMember(
-    teamId: string,
-    memberAddress: string,
-    leaderAddress: string,
-  ): Promise<TeamDocument> {
-    const team = await this.findById(teamId);
-
-    // Verify user is the leader
-    if (team.leader !== leaderAddress.toLowerCase()) {
-      throw new ForbiddenException('Only the team leader can add members');
+    // Check if there's already a pending invitation
+    if (team.invitations.some((inv) => inv.userId === userId && inv.status === 'pending')) {
+      throw new BadRequestException('User already has a pending invitation');
     }
 
-    const normalizedAddress = memberAddress.toLowerCase();
-
-    // Check if already a member
-    if (team.members.includes(normalizedAddress)) {
-      throw new BadRequestException('User is already a team member');
+    // Check if team is full
+    if (team.members.length >= team.maxMembers) {
+      throw new BadRequestException('Team has reached maximum capacity');
     }
 
-    // Remove from pending invites if present
-    team.pendingInvites = team.pendingInvites.filter(
-      (addr) => addr !== normalizedAddress,
-    );
-
-    team.members.push(normalizedAddress);
-    
-    const updatedTeam = await team.save();
-    this.logger.log(`Added member ${memberAddress} to team ${teamId}`);
-    
-    return updatedTeam;
-  }
-
-  /**
-   * Remove member from team
-   */
-  async removeMember(
-    teamId: string,
-    memberAddress: string,
-    leaderAddress: string,
-  ): Promise<TeamDocument> {
-    const team = await this.findById(teamId);
-
-    // Verify user is the leader
-    if (team.leader !== leaderAddress.toLowerCase()) {
-      throw new ForbiddenException('Only the team leader can remove members');
-    }
-
-    const normalizedAddress = memberAddress.toLowerCase();
-
-    // Cannot remove the leader
-    if (normalizedAddress === team.leader) {
-      throw new BadRequestException('Cannot remove the team leader');
-    }
-
-    const initialLength = team.members.length;
-    team.members = team.members.filter((addr) => addr !== normalizedAddress);
-
-    if (team.members.length === initialLength) {
-      throw new NotFoundException('Member not found in team');
-    }
-
-    const updatedTeam = await team.save();
-    this.logger.log(`Removed member ${memberAddress} from team ${teamId}`);
-    
-    return updatedTeam;
-  }
-
-  /**
-   * Invite user to team
-   */
-  async inviteMember(
-    teamId: string,
-    memberAddress: string,
-    leaderAddress: string,
-  ): Promise<TeamDocument> {
-    const team = await this.findById(teamId);
-
-    // Verify user is the leader
-    if (team.leader !== leaderAddress.toLowerCase()) {
-      throw new ForbiddenException('Only the team leader can invite members');
-    }
-
-    const normalizedAddress = memberAddress.toLowerCase();
-
-    // Check if already invited
-    if (team.pendingInvites.includes(normalizedAddress)) {
-      throw new BadRequestException('User already has a pending invite');
-    }
-
-    // Check if already a member
-    if (team.members.includes(normalizedAddress)) {
-      throw new BadRequestException('User is already a team member');
-    }
-
-    team.pendingInvites.push(normalizedAddress);
-    
-    const updatedTeam = await team.save();
-    this.logger.log(`Invited ${memberAddress} to team ${teamId}`);
-    
-    return updatedTeam;
-  }
-
-  /**
-   * Accept team invite
-   */
-  async acceptInvite(
-    teamId: string,
-    memberAddress: string,
-  ): Promise<TeamDocument> {
-    const team = await this.findById(teamId);
-
-    const normalizedAddress = memberAddress.toLowerCase();
-
-    // Check if user has pending invite
-    if (!team.pendingInvites.includes(normalizedAddress)) {
-      throw new BadRequestException('No pending invite found');
-    }
-
-    // Remove from pending invites
-    team.pendingInvites = team.pendingInvites.filter(
-      (addr) => addr !== normalizedAddress,
-    );
-
-    // Add to members
-    team.members.push(normalizedAddress);
-    
-    const updatedTeam = await team.save();
-    this.logger.log(`${memberAddress} accepted invite to team ${teamId}`);
-    
-    return updatedTeam;
-  }
-
-  /**
-   * Reject team invite
-   */
-  async rejectInvite(
-    teamId: string,
-    memberAddress: string,
-  ): Promise<TeamDocument> {
-    const team = await this.findById(teamId);
-
-    const normalizedAddress = memberAddress.toLowerCase();
-
-    // Check if user has pending invite
-    if (!team.pendingInvites.includes(normalizedAddress)) {
-      throw new BadRequestException('No pending invite found');
-    }
-
-    // Remove from pending invites
-    team.pendingInvites = team.pendingInvites.filter(
-      (addr) => addr !== normalizedAddress,
-    );
-    
-    const updatedTeam = await team.save();
-    this.logger.log(`${memberAddress} rejected invite to team ${teamId}`);
-    
-    return updatedTeam;
-  }
-
-  /**
-   * Leave team
-   */
-  async leaveTeam(teamId: string, memberAddress: string): Promise<void> {
-    const team = await this.findById(teamId);
-
-    const normalizedAddress = memberAddress.toLowerCase();
-
-    // Leader cannot leave, must transfer leadership first
-    if (team.leader === normalizedAddress) {
-      throw new BadRequestException(
-        'Team leader must transfer leadership before leaving',
-      );
-    }
-
-    team.members = team.members.filter((addr) => addr !== normalizedAddress);
-    
-    await team.save();
-    this.logger.log(`${memberAddress} left team ${teamId}`);
-  }
-
-  /**
-   * Transfer leadership
-   */
-  async transferLeadership(
-    teamId: string,
-    newLeaderAddress: string,
-    currentLeaderAddress: string,
-  ): Promise<TeamDocument> {
-    const team = await this.findById(teamId);
-
-    // Verify user is current leader
-    if (team.leader !== currentLeaderAddress.toLowerCase()) {
-      throw new ForbiddenException('Only the team leader can transfer leadership');
-    }
-
-    const normalizedAddress = newLeaderAddress.toLowerCase();
-
-    // Verify new leader is a team member
-    if (!team.members.includes(normalizedAddress)) {
-      throw new BadRequestException('New leader must be a team member');
-    }
-
-    team.leader = normalizedAddress;
-    
-    const updatedTeam = await team.save();
-    this.logger.log(
-      `Leadership of team ${teamId} transferred to ${newLeaderAddress}`,
-    );
-    
-    return updatedTeam;
-  }
-
-  /**
-   * Disband team
-   */
-  async disband(teamId: string, leaderAddress: string): Promise<void> {
-    const team = await this.findById(teamId);
-
-    // Verify user is the leader
-    if (team.leader !== leaderAddress.toLowerCase()) {
-      throw new ForbiddenException('Only the team leader can disband the team');
-    }
-
-    team.isActive = false;
-    team.disbandedAt = new Date();
-    
-    await team.save();
-    this.logger.log(`Team disbanded: ${teamId} by ${leaderAddress}`);
-  }
-
-  /**
-   * Get user's teams
-   */
-  async getUserTeams(userAddress: string): Promise<TeamDocument[]> {
-    const normalizedAddress = userAddress.toLowerCase();
-
-    return this.teamModel
-      .find({
-        members: normalizedAddress,
-        isActive: true,
-      })
-      .sort({ createdAt: -1 })
-      .exec();
-  }
-
-  /**
-   * Get teams where user is leader
-   */
-  async getUserLeaderTeams(userAddress: string): Promise<TeamDocument[]> {
-    const normalizedAddress = userAddress.toLowerCase();
-
-    return this.teamModel
-      .find({
-        leader: normalizedAddress,
-        isActive: true,
-      })
-      .sort({ createdAt: -1 })
-      .exec();
-  }
-
-  /**
-   * Get pending invites for user
-   */
-  async getUserPendingInvites(userAddress: string): Promise<TeamDocument[]> {
-    const normalizedAddress = userAddress.toLowerCase();
-
-    return this.teamModel
-      .find({
-        pendingInvites: normalizedAddress,
-        isActive: true,
-      })
-      .sort({ createdAt: -1 })
-      .exec();
-  }
-
-  /**
-   * Update team stats
-   */
-  async updateStats(
-    teamId: string,
-    stats: Partial<Team['stats']>,
-  ): Promise<TeamDocument> {
-    const team = await this.findById(teamId);
-
-    team.stats = {
-      ...team.stats,
-      ...stats,
+    // Create invitation
+    const invitation: TeamInvitation = {
+      id: uuidv4(),
+      userId,
+      invitedBy: ownerId,
+      status: 'pending',
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     };
 
-    return team.save();
+    team.invitations.push(invitation);
+    team.updatedAt = new Date();
+
+    const updated = await team.save();
+    return this.mapToResponseDto(updated);
   }
 
   /**
-   * Get team statistics
+   * Accept a team invitation
    */
-  async getTeamStats(): Promise<TeamStats> {
-    const teams = await this.teamModel.find({ isActive: true }).exec();
+  async acceptInvitation(userId: string, teamId: string, invitationId: string): Promise<TeamResponseDto> {
+    this.logger.log(`User ${userId} accepting invitation ${invitationId} for team ${teamId}`);
 
-    const totalMembers = teams.reduce(
-      (sum, team) => sum + team.members.length,
-      0,
-    );
+    const team = await this.teamModel.findById(teamId).exec();
 
-    const topTeams = teams
-      .sort((a, b) => b.members.length - a.members.length)
-      .slice(0, 10)
-      .map((team) => ({
-        teamId: team._id.toString(),
-        name: team.name,
-        memberCount: team.members.length,
-      }));
+    if (!team) {
+      throw new NotFoundException(`Team with ID ${teamId} not found`);
+    }
 
+    const invitation = team.invitations.find((inv) => inv.id === invitationId);
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.userId !== userId) {
+      throw new ForbiddenException('This invitation is not for you');
+    }
+
+    if (invitation.status !== 'pending') {
+      throw new BadRequestException('Invitation has already been processed');
+    }
+
+    if (invitation.expiresAt && invitation.expiresAt < new Date()) {
+      invitation.status = 'expired';
+      await team.save();
+      throw new BadRequestException('Invitation has expired');
+    }
+
+    // Check if team is full
+    if (team.members.length >= team.maxMembers) {
+      throw new BadRequestException('Team has reached maximum capacity');
+    }
+
+    // Add member
+    const newMember: TeamMember = {
+      userId,
+      role: 'member',
+      joinedAt: new Date(),
+    };
+
+    team.members.push(newMember);
+    invitation.status = 'accepted';
+    team.updatedAt = new Date();
+
+    const updated = await team.save();
+    return this.mapToResponseDto(updated);
+  }
+
+  /**
+   * Decline a team invitation
+   */
+  async declineInvitation(userId: string, teamId: string, invitationId: string): Promise<void> {
+    this.logger.log(`User ${userId} declining invitation ${invitationId} for team ${teamId}`);
+
+    const team = await this.teamModel.findById(teamId).exec();
+
+    if (!team) {
+      throw new NotFoundException(`Team with ID ${teamId} not found`);
+    }
+
+    const invitation = team.invitations.find((inv) => inv.id === invitationId);
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.userId !== userId) {
+      throw new ForbiddenException('This invitation is not for you');
+    }
+
+    if (invitation.status !== 'pending') {
+      throw new BadRequestException('Invitation has already been processed');
+    }
+
+    invitation.status = 'declined';
+    team.updatedAt = new Date();
+
+    await team.save();
+  }
+
+  /**
+   * Remove a member from the team
+   */
+  async removeMember(ownerId: string, teamId: string, memberId: string): Promise<TeamResponseDto> {
+    this.logger.log(`Owner ${ownerId} removing member ${memberId} from team ${teamId}`);
+
+    const team = await this.teamModel.findById(teamId).exec();
+
+    if (!team) {
+      throw new NotFoundException(`Team with ID ${teamId} not found`);
+    }
+
+    // Check if user is the owner
+    if (team.ownerId !== ownerId) {
+      throw new ForbiddenException('Only the team owner can remove members');
+    }
+
+    // Can't remove the owner
+    if (memberId === ownerId) {
+      throw new BadRequestException('Cannot remove the team owner');
+    }
+
+    // Remove member
+    team.members = team.members.filter((m) => m.userId !== memberId);
+    team.updatedAt = new Date();
+
+    const updated = await team.save();
+    return this.mapToResponseDto(updated);
+  }
+
+  /**
+   * Get teams for a specific user
+   */
+  async getTeamsForUser(userId: string): Promise<TeamResponseDto[]> {
+    const teams = await this.teamModel.find({ 'members.userId': userId }).exec();
+    return teams.map((team) => this.mapToResponseDto(team));
+  }
+
+  /**
+   * Get teams for a specific event
+   */
+  async getTeamsForEvent(eventId: string): Promise<TeamResponseDto[]> {
+    const teams = await this.teamModel.find({ eventId }).exec();
+    return teams.map((team) => this.mapToResponseDto(team));
+  }
+
+  /**
+   * Map team document to response DTO
+   */
+  private mapToResponseDto(team: TeamDocument): TeamResponseDto {
     return {
-      totalTeams: teams.length,
-      activeTeams: teams.filter((t) => t.isActive).length,
-      averageTeamSize: teams.length > 0 ? totalMembers / teams.length : 0,
-      topTeams,
+      id: team._id.toString(),
+      name: team.name,
+      description: team.description,
+      eventId: team.eventId,
+      ownerId: team.ownerId,
+      members: team.members,
+      invitations: team.invitations,
+      maxMembers: team.maxMembers,
+      avatarUrl: team.avatarUrl,
+      metadata: team.metadata,
+      createdAt: team.createdAt,
+      updatedAt: team.updatedAt,
     };
-  }
-
-  /**
-   * Search teams
-   */
-  async search(query: string, limit: number = 10): Promise<TeamDocument[]> {
-    return this.teamModel
-      .find({
-        $text: { $search: query },
-        isActive: true,
-      })
-      .limit(limit)
-      .exec();
   }
 }
-
