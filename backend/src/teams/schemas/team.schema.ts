@@ -1,9 +1,24 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type TeamDocument = Team & Document;
 
-@Schema({ timestamps: true })
+export interface TeamMember {
+  userId: string;
+  role: 'owner' | 'member';
+  joinedAt: Date;
+}
+
+export interface TeamInvitation {
+  id: string;
+  userId: string;
+  invitedBy: string;
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
+  createdAt: Date;
+  expiresAt?: Date;
+}
+
+@Schema({ collection: 'teams' })
 export class Team {
   @Prop({ required: true })
   name: string;
@@ -11,48 +26,40 @@ export class Team {
   @Prop()
   description?: string;
 
-  @Prop({ required: true })
-  leader: string; // wallet address
+  @Prop({ required: true, type: Types.ObjectId, ref: 'Event' })
+  eventId: string;
 
-  @Prop({ type: [String], default: [] })
-  members: string[]; // wallet addresses
+  @Prop({ required: true, type: Types.ObjectId, ref: 'User' })
+  ownerId: string;
 
-  @Prop({ type: [String], default: [] })
-  pendingInvites: string[]; // wallet addresses
+  @Prop({ type: [Object], default: [] })
+  members: TeamMember[];
+
+  @Prop({ type: [Object], default: [] })
+  invitations: TeamInvitation[];
+
+  @Prop({ type: Number, default: 5 })
+  maxMembers: number;
 
   @Prop()
-  eventId?: string;
+  avatarUrl?: string;
 
   @Prop({ type: Object })
   metadata?: Record<string, any>;
 
-  @Prop()
-  logo?: string;
+  @Prop({ type: Date, default: Date.now })
+  createdAt: Date;
 
-  @Prop({ type: [String], default: [] })
-  tags: string[];
-
-  @Prop({ default: true })
-  isActive: boolean;
-
-  @Prop()
-  disbanded AtFrom?: Date;
-
-  @Prop({ type: Object })
-  stats?: {
-    totalSubmissions: number;
-    totalWins: number;
-    totalParticipations: number;
-    averageScore: number;
-  };
+  @Prop({ type: Date, default: Date.now })
+  updatedAt: Date;
 }
 
 export const TeamSchema = SchemaFactory.createForClass(Team);
 
 // Indexes
-TeamSchema.index({ leader: 1 });
-TeamSchema.index({ members: 1 });
+TeamSchema.index({ name: 1 });
 TeamSchema.index({ eventId: 1 });
-TeamSchema.index({ isActive: 1 });
-TeamSchema.index({ name: 'text', description: 'text' });
-
+TeamSchema.index({ ownerId: 1 });
+TeamSchema.index({ 'members.userId': 1 });
+TeamSchema.index({ createdAt: -1 });
+TeamSchema.index({ eventId: 1, name: 1 }, { unique: true });
