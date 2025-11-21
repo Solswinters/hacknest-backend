@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { EventEmitter } from 'events';
 
 export interface QueueJob<T = any> {
   id: string;
@@ -6,198 +7,245 @@ export interface QueueJob<T = any> {
   priority: number;
   attempts: number;
   maxAttempts: number;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  delay: number;
   createdAt: Date;
   processedAt?: Date;
+  completedAt?: Date;
+  failedAt?: Date;
   error?: string;
 }
 
+export interface QueueOptions {
+  maxConcurrency?: number;
+  defaultPriority?: number;
+  defaultMaxAttempts?: number;
+  retryDelay?: number;
+}
+
 @Injectable()
-export class QueueService {
+export class QueueService extends EventEmitter {
   private readonly logger = new Logger(QueueService.name);
-  private queues: Map<string, QueueJob[]> = new Map();
-  private processors: Map<string, (job: QueueJob) => Promise<void>> = new Map();
+  private queue: QueueJob[] = [];
   private processing: Set<string> = new Set();
-  private nextJobId: number = 0;
+  private nextJobId = 0;
+  private isRunning = false;
+
+  constructor(private readonly options: QueueOptions = {}) {
+    super();
+    this.options = {
+      maxConcurrency: 5,
+      defaultPriority: 0,
+      defaultMaxAttempts: 3,
+      retryDelay: 1000,
+      ...options,
+    };
+  }
 
   /**
-   * Add job to queue
+   * Add a job to the queue
    */
-  async add<T>(
-    queueName: string,
-    data: T,
-    options: { priority?: number; maxAttempts?: number } = {}
-  ): Promise<string> {
+  async add<T>(data: T, options: Partial<QueueJob> = {}): Promise<string> {
     const jobId = `job-${this.nextJobId++}`;
 
     const job: QueueJob<T> = {
       id: jobId,
       data,
-      priority: options.priority || 0,
+      priority: options.priority ?? this.options.defaultPriority!,
       attempts: 0,
-      maxAttempts: options.maxAttempts || 3,
-      status: 'pending',
+      maxAttempts: options.maxAttempts ?? this.options.defaultMaxAttempts!,
+      delay: options.delay ?? 0,
       createdAt: new Date(),
     };
 
-    if (!this.queues.has(queueName)) {
-      this.queues.set(queueName, []);
+    this.queue.push(job);
+    this.sortQueue();
+
+    this.emit('job:added', job);
+    this.logger.debug(`Job ${jobId} added to queue`);
+
+    if (!this.isRunning) {
+      this.processQueue();
     }
-
-    const queue = this.queues.get(queueName)!;
-    queue.push(job);
-
-    // Sort by priority
-    queue.sort((a, b) => b.priority - a.priority);
-
-    this.logger.debug(`Job ${jobId} added to queue ${queueName}`);
-
-    // Process queue
-    this.processQueue(queueName);
 
     return jobId;
   }
 
   /**
-   * Register processor
+   * Process the queue
    */
-  registerProcessor(
-    queueName: string,
-    processor: (job: QueueJob) => Promise<void>
-  ): void {
-    this.processors.set(queueName, processor);
-    this.logger.log(`Processor registered for queue: ${queueName}`);
+  private async processQueue(): Promise<void> {
+    if (this.isRunning) return;
+
+    this.isRunning = true;
+
+    while (this.queue.length > 0 && this.processing.size < this.options.maxConcurrency!) {
+      const job = this.getNextJob();
+      if (!job) break;
+
+      this.processJob(job);
+    }
+
+    if (this.processing.size === 0) {
+      this.isRunning = false;
+    }
   }
 
   /**
-   * Process queue
+   * Get next job from queue
    */
-  private async processQueue(queueName: string): Promise<void> {
-    if (this.processing.has(queueName)) {
-      return;
-    }
+  private getNextJob(): QueueJob | null {
+    const now = new Date();
 
-    const queue = this.queues.get(queueName);
-    const processor = this.processors.get(queueName);
+    for (let i = 0; i < this.queue.length; i++) {
+      const job = this.queue[i];
 
-    if (!queue || !processor) {
-      return;
-    }
-
-    this.processing.add(queueName);
-
-    while (queue.length > 0) {
-      const job = queue.find((j) => j.status === 'pending');
-
-      if (!job) {
-        break;
+      // Check if job delay has passed
+      if (job.delay > 0) {
+        const delayEnd = new Date(job.createdAt.getTime() + job.delay);
+        if (now < delayEnd) continue;
       }
 
-      job.status = 'processing';
-      job.attempts++;
-
-      try {
-        await processor(job);
-        job.status = 'completed';
-        job.processedAt = new Date();
-        this.logger.log(`Job ${job.id} completed in queue ${queueName}`);
-
-        // Remove completed job
-        const index = queue.indexOf(job);
-        if (index > -1) {
-          queue.splice(index, 1);
-        }
-      } catch (error: any) {
-        this.logger.error(
-          `Job ${job.id} failed in queue ${queueName}: ${error.message}`
-        );
-
-        job.error = error.message;
-
-        if (job.attempts >= job.maxAttempts) {
-          job.status = 'failed';
-          this.logger.error(`Job ${job.id} failed permanently`);
-
-          // Remove failed job
-          const index = queue.indexOf(job);
-          if (index > -1) {
-            queue.splice(index, 1);
-          }
-        } else {
-          job.status = 'pending';
-          this.logger.warn(
-            `Job ${job.id} will be retried (${job.attempts}/${job.maxAttempts})`
-          );
-        }
-      }
+      // Remove from queue and return
+      this.queue.splice(i, 1);
+      return job;
     }
 
-    this.processing.delete(queueName);
+    return null;
+  }
+
+  /**
+   * Process a single job
+   */
+  private async processJob(job: QueueJob): Promise<void> {
+    this.processing.add(job.id);
+    job.processedAt = new Date();
+    job.attempts++;
+
+    this.emit('job:processing', job);
+    this.logger.debug(`Processing job ${job.id} (attempt ${job.attempts}/${job.maxAttempts})`);
+
+    try {
+      // Emit job for external handlers
+      const result = await this.executeJob(job);
+
+      job.completedAt = new Date();
+      this.processing.delete(job.id);
+
+      this.emit('job:completed', job, result);
+      this.logger.debug(`Job ${job.id} completed successfully`);
+    } catch (error) {
+      this.logger.error(`Job ${job.id} failed:`, error);
+
+      job.error = error instanceof Error ? error.message : String(error);
+
+      if (job.attempts < job.maxAttempts) {
+        // Retry job
+        job.delay = this.options.retryDelay! * job.attempts;
+        this.queue.push(job);
+        this.sortQueue();
+
+        this.emit('job:retry', job);
+        this.logger.debug(`Job ${job.id} will be retried (attempt ${job.attempts + 1}/${job.maxAttempts})`);
+      } else {
+        // Job failed permanently
+        job.failedAt = new Date();
+        this.emit('job:failed', job, error);
+        this.logger.error(`Job ${job.id} failed permanently after ${job.attempts} attempts`);
+      }
+
+      this.processing.delete(job.id);
+    }
+
+    // Continue processing
+    this.processQueue();
+  }
+
+  /**
+   * Execute job (to be overridden or handled by event listeners)
+   */
+  private async executeJob(job: QueueJob): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Job execution timeout'));
+      }, 30000); // 30 second timeout
+
+      this.emit('job:execute', job, (error: Error | null, result?: any) => {
+        clearTimeout(timeout);
+        if (error) reject(error);
+        else resolve(result);
+      });
+    });
+  }
+
+  /**
+   * Sort queue by priority
+   */
+  private sortQueue(): void {
+    this.queue.sort((a, b) => b.priority - a.priority);
+  }
+
+  /**
+   * Get queue status
+   */
+  getStatus(): {
+    pending: number;
+    processing: number;
+    total: number;
+  } {
+    return {
+      pending: this.queue.length,
+      processing: this.processing.size,
+      total: this.queue.length + this.processing.size,
+    };
   }
 
   /**
    * Get job by ID
    */
-  getJob(queueName: string, jobId: string): QueueJob | undefined {
-    const queue = this.queues.get(queueName);
-    return queue?.find((j) => j.id === jobId);
+  getJob(jobId: string): QueueJob | undefined {
+    return this.queue.find((job) => job.id === jobId);
   }
 
   /**
-   * Get queue size
+   * Remove job from queue
    */
-  getQueueSize(queueName: string): number {
-    return this.queues.get(queueName)?.length || 0;
+  removeJob(jobId: string): boolean {
+    const index = this.queue.findIndex((job) => job.id === jobId);
+    if (index !== -1) {
+      this.queue.splice(index, 1);
+      this.emit('job:removed', jobId);
+      return true;
+    }
+    return false;
   }
 
   /**
-   * Get pending jobs
+   * Clear all pending jobs
    */
-  getPendingJobs(queueName: string): QueueJob[] {
-    const queue = this.queues.get(queueName);
-    return queue?.filter((j) => j.status === 'pending') || [];
+  clear(): void {
+    const count = this.queue.length;
+    this.queue = [];
+    this.emit('queue:cleared', count);
+    this.logger.log(`Cleared ${count} pending jobs from queue`);
   }
 
   /**
-   * Get processing jobs
+   * Pause queue processing
    */
-  getProcessingJobs(queueName: string): QueueJob[] {
-    const queue = this.queues.get(queueName);
-    return queue?.filter((j) => j.status === 'processing') || [];
+  pause(): void {
+    this.isRunning = false;
+    this.emit('queue:paused');
+    this.logger.log('Queue processing paused');
   }
 
   /**
-   * Clear queue
+   * Resume queue processing
    */
-  clear(queueName: string): void {
-    this.queues.delete(queueName);
-    this.logger.log(`Queue ${queueName} cleared`);
-  }
-
-  /**
-   * Get all queue names
-   */
-  getQueueNames(): string[] {
-    return Array.from(this.queues.keys());
-  }
-
-  /**
-   * Get queue stats
-   */
-  getQueueStats(queueName: string): {
-    total: number;
-    pending: number;
-    processing: number;
-  } {
-    const queue = this.queues.get(queueName) || [];
-
-    return {
-      total: queue.length,
-      pending: queue.filter((j) => j.status === 'pending').length,
-      processing: queue.filter((j) => j.status === 'processing').length,
-    };
+  resume(): void {
+    if (!this.isRunning) {
+      this.emit('queue:resumed');
+      this.logger.log('Queue processing resumed');
+      this.processQueue();
+    }
   }
 }
-
-export default QueueService;
-
