@@ -7,225 +7,299 @@ export interface Metric {
   tags?: Record<string, string>;
 }
 
-export interface MetricStats {
+export interface Counter {
+  count: number;
+  lastUpdated: Date;
+}
+
+export interface Histogram {
+  values: number[];
   count: number;
   sum: number;
   min: number;
   max: number;
-  avg: number;
+  mean: number;
+  median: number;
+  p95: number;
+  p99: number;
 }
 
 @Injectable()
 export class MetricsService {
   private readonly logger = new Logger(MetricsService.name);
-  private metrics: Map<string, Metric[]> = new Map();
-  private readonly maxMetricsPerName: number = 1000;
+  private counters: Map<string, Counter> = new Map();
+  private gauges: Map<string, number> = new Map();
+  private histograms: Map<string, number[]> = new Map();
+  private timings: Map<string, number[]> = new Map();
 
   /**
-   * Record metric
+   * Increment a counter
    */
-  record(name: string, value: number, tags?: Record<string, string>): void {
-    const metric: Metric = {
-      name,
-      value,
-      timestamp: new Date(),
-      tags,
-    };
+  incrementCounter(name: string, value: number = 1, tags?: Record<string, string>): void {
+    const key = this.buildKey(name, tags);
+    const counter = this.counters.get(key) || { count: 0, lastUpdated: new Date() };
 
-    if (!this.metrics.has(name)) {
-      this.metrics.set(name, []);
+    counter.count += value;
+    counter.lastUpdated = new Date();
+
+    this.counters.set(key, counter);
+  }
+
+  /**
+   * Decrement a counter
+   */
+  decrementCounter(name: string, value: number = 1, tags?: Record<string, string>): void {
+    this.incrementCounter(name, -value, tags);
+  }
+
+  /**
+   * Set a gauge value
+   */
+  setGauge(name: string, value: number, tags?: Record<string, string>): void {
+    const key = this.buildKey(name, tags);
+    this.gauges.set(key, value);
+  }
+
+  /**
+   * Record a histogram value
+   */
+  recordHistogram(name: string, value: number, tags?: Record<string, string>): void {
+    const key = this.buildKey(name, tags);
+    const values = this.histograms.get(key) || [];
+
+    values.push(value);
+
+    // Keep last 1000 values
+    if (values.length > 1000) {
+      values.shift();
     }
 
-    const metricList = this.metrics.get(name)!;
-    metricList.push(metric);
+    this.histograms.set(key, values);
+  }
 
-    // Keep only recent metrics
-    if (metricList.length > this.maxMetricsPerName) {
-      metricList.shift();
+  /**
+   * Record a timing (in milliseconds)
+   */
+  recordTiming(name: string, duration: number, tags?: Record<string, string>): void {
+    const key = this.buildKey(name, tags);
+    const timings = this.timings.get(key) || [];
+
+    timings.push(duration);
+
+    // Keep last 1000 timings
+    if (timings.length > 1000) {
+      timings.shift();
     }
 
-    this.logger.debug(`Metric recorded: ${name} = ${value}`);
+    this.timings.set(key, timings);
   }
 
   /**
-   * Increment counter
+   * Time a function execution
    */
-  increment(name: string, tags?: Record<string, string>): void {
-    this.record(name, 1, tags);
-  }
-
-  /**
-   * Decrement counter
-   */
-  decrement(name: string, tags?: Record<string, string>): void {
-    this.record(name, -1, tags);
-  }
-
-  /**
-   * Record timing
-   */
-  timing(name: string, duration: number, tags?: Record<string, string>): void {
-    this.record(`${name}.duration`, duration, tags);
-  }
-
-  /**
-   * Get metric stats
-   */
-  getStats(name: string, since?: Date): MetricStats | null {
-    const metricList = this.metrics.get(name);
-
-    if (!metricList || metricList.length === 0) {
-      return null;
-    }
-
-    let filtered = metricList;
-
-    if (since) {
-      filtered = metricList.filter((m) => m.timestamp >= since);
-    }
-
-    if (filtered.length === 0) {
-      return null;
-    }
-
-    const values = filtered.map((m) => m.value);
-    const sum = values.reduce((a, b) => a + b, 0);
-
-    return {
-      count: filtered.length,
-      sum,
-      min: Math.min(...values),
-      max: Math.max(...values),
-      avg: sum / filtered.length,
-    };
-  }
-
-  /**
-   * Get recent metrics
-   */
-  getRecent(name: string, limit: number = 100): Metric[] {
-    const metricList = this.metrics.get(name);
-
-    if (!metricList) {
-      return [];
-    }
-
-    return metricList.slice(-limit);
-  }
-
-  /**
-   * Get all metric names
-   */
-  getMetricNames(): string[] {
-    return Array.from(this.metrics.keys());
-  }
-
-  /**
-   * Clear metrics
-   */
-  clear(name?: string): void {
-    if (name) {
-      this.metrics.delete(name);
-      this.logger.log(`Metrics cleared for: ${name}`);
-    } else {
-      this.metrics.clear();
-      this.logger.log('All metrics cleared');
-    }
-  }
-
-  /**
-   * Get metric count
-   */
-  getMetricCount(name: string): number {
-    return this.metrics.get(name)?.length || 0;
-  }
-
-  /**
-   * Get metrics by tag
-   */
-  getMetricsByTag(
-    name: string,
-    tagKey: string,
-    tagValue: string
-  ): Metric[] {
-    const metricList = this.metrics.get(name);
-
-    if (!metricList) {
-      return [];
-    }
-
-    return metricList.filter(
-      (m) => m.tags && m.tags[tagKey] === tagValue
-    );
-  }
-
-  /**
-   * Get metrics summary
-   */
-  getSummary(): Record<string, MetricStats> {
-    const summary: Record<string, MetricStats> = {};
-
-    for (const name of this.getMetricNames()) {
-      const stats = this.getStats(name);
-      if (stats) {
-        summary[name] = stats;
-      }
-    }
-
-    return summary;
-  }
-
-  /**
-   * Export metrics
-   */
-  export(): Record<string, Metric[]> {
-    const exported: Record<string, Metric[]> = {};
-
-    for (const [name, metrics] of this.metrics.entries()) {
-      exported[name] = [...metrics];
-    }
-
-    return exported;
-  }
-
-  /**
-   * Measure execution time
-   */
-  async measure<T>(
-    name: string,
-    fn: () => Promise<T>,
-    tags?: Record<string, string>
-  ): Promise<T> {
+  async time<T>(name: string, fn: () => Promise<T>, tags?: Record<string, string>): Promise<T> {
     const start = Date.now();
 
     try {
       const result = await fn();
       const duration = Date.now() - start;
-      this.timing(name, duration, tags);
+      this.recordTiming(name, duration, tags);
       return result;
     } catch (error) {
       const duration = Date.now() - start;
-      this.timing(name, duration, { ...tags, error: 'true' });
+      this.recordTiming(name, duration, { ...tags, error: 'true' });
       throw error;
     }
   }
 
   /**
-   * Get percentile
+   * Time a sync function execution
    */
-  getPercentile(name: string, percentile: number): number | null {
-    const metricList = this.metrics.get(name);
+  timeSync<T>(name: string, fn: () => T, tags?: Record<string, string>): T {
+    const start = Date.now();
 
-    if (!metricList || metricList.length === 0) {
-      return null;
+    try {
+      const result = fn();
+      const duration = Date.now() - start;
+      this.recordTiming(name, duration, tags);
+      return result;
+    } catch (error) {
+      const duration = Date.now() - start;
+      this.recordTiming(name, duration, { ...tags, error: 'true' });
+      throw error;
+    }
+  }
+
+  /**
+   * Get counter value
+   */
+  getCounter(name: string, tags?: Record<string, string>): number {
+    const key = this.buildKey(name, tags);
+    return this.counters.get(key)?.count || 0;
+  }
+
+  /**
+   * Get gauge value
+   */
+  getGauge(name: string, tags?: Record<string, string>): number | undefined {
+    const key = this.buildKey(name, tags);
+    return this.gauges.get(key);
+  }
+
+  /**
+   * Get histogram stats
+   */
+  getHistogram(name: string, tags?: Record<string, string>): Histogram | null {
+    const key = this.buildKey(name, tags);
+    const values = this.histograms.get(key);
+
+    if (!values || values.length === 0) return null;
+
+    return this.calculateHistogramStats(values);
+  }
+
+  /**
+   * Get timing stats
+   */
+  getTimingStats(name: string, tags?: Record<string, string>): Histogram | null {
+    const key = this.buildKey(name, tags);
+    const values = this.timings.get(key);
+
+    if (!values || values.length === 0) return null;
+
+    return this.calculateHistogramStats(values);
+  }
+
+  /**
+   * Get all metrics
+   */
+  getAllMetrics(): {
+    counters: Record<string, Counter>;
+    gauges: Record<string, number>;
+    histograms: Record<string, Histogram>;
+    timings: Record<string, Histogram>;
+  } {
+    const counters: Record<string, Counter> = {};
+    const gauges: Record<string, number> = {};
+    const histograms: Record<string, Histogram> = {};
+    const timings: Record<string, Histogram> = {};
+
+    this.counters.forEach((value, key) => {
+      counters[key] = value;
+    });
+
+    this.gauges.forEach((value, key) => {
+      gauges[key] = value;
+    });
+
+    this.histograms.forEach((values, key) => {
+      const stats = this.calculateHistogramStats(values);
+      if (stats) histograms[key] = stats;
+    });
+
+    this.timings.forEach((values, key) => {
+      const stats = this.calculateHistogramStats(values);
+      if (stats) timings[key] = stats;
+    });
+
+    return { counters, gauges, histograms, timings };
+  }
+
+  /**
+   * Reset all metrics
+   */
+  reset(): void {
+    this.counters.clear();
+    this.gauges.clear();
+    this.histograms.clear();
+    this.timings.clear();
+    this.logger.log('All metrics reset');
+  }
+
+  /**
+   * Reset specific metric
+   */
+  resetMetric(name: string, tags?: Record<string, string>): void {
+    const key = this.buildKey(name, tags);
+    this.counters.delete(key);
+    this.gauges.delete(key);
+    this.histograms.delete(key);
+    this.timings.delete(key);
+  }
+
+  /**
+   * Build metric key from name and tags
+   */
+  private buildKey(name: string, tags?: Record<string, string>): string {
+    if (!tags || Object.keys(tags).length === 0) {
+      return name;
     }
 
-    const values = metricList.map((m) => m.value).sort((a, b) => a - b);
-    const index = Math.ceil((percentile / 100) * values.length) - 1;
+    const tagString = Object.entries(tags)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}:${value}`)
+      .join(',');
 
-    return values[index];
+    return `${name}{${tagString}}`;
+  }
+
+  /**
+   * Calculate histogram statistics
+   */
+  private calculateHistogramStats(values: number[]): Histogram {
+    const sorted = [...values].sort((a, b) => a - b);
+    const count = sorted.length;
+    const sum = sorted.reduce((acc, val) => acc + val, 0);
+    const mean = sum / count;
+
+    const p95Index = Math.floor(count * 0.95);
+    const p99Index = Math.floor(count * 0.99);
+
+    return {
+      values: sorted,
+      count,
+      sum,
+      min: sorted[0],
+      max: sorted[count - 1],
+      mean,
+      median: this.getPercentile(sorted, 50),
+      p95: sorted[p95Index],
+      p99: sorted[p99Index],
+    };
+  }
+
+  /**
+   * Get percentile value
+   */
+  private getPercentile(sortedValues: number[], percentile: number): number {
+    const index = Math.floor((sortedValues.length * percentile) / 100);
+    return sortedValues[index];
+  }
+
+  /**
+   * Log metrics summary
+   */
+  logSummary(): void {
+    const metrics = this.getAllMetrics();
+
+    this.logger.log('=== Metrics Summary ===');
+    this.logger.log(`Counters: ${Object.keys(metrics.counters).length}`);
+    this.logger.log(`Gauges: ${Object.keys(metrics.gauges).length}`);
+    this.logger.log(`Histograms: ${Object.keys(metrics.histograms).length}`);
+    this.logger.log(`Timings: ${Object.keys(metrics.timings).length}`);
+
+    // Log top timings
+    const topTimings = Object.entries(metrics.timings)
+      .sort(([, a], [, b]) => b.mean - a.mean)
+      .slice(0, 10);
+
+    if (topTimings.length > 0) {
+      this.logger.log('Top 10 Slowest Operations:');
+      topTimings.forEach(([name, stats]) => {
+        this.logger.log(
+          `  ${name}: mean=${stats.mean.toFixed(2)}ms, p95=${stats.p95.toFixed(2)}ms, p99=${stats.p99.toFixed(2)}ms`,
+        );
+      });
+    }
   }
 }
-
-export default MetricsService;
-
