@@ -212,12 +212,125 @@ export class RateLimiterService {
   }
 
   /**
+   * Apply rate limit (alias for checkLimit with better naming)
+   */
+  applyRateLimit(
+    identifier: string,
+    config: RateLimitConfig
+  ): { allowed: boolean; info: RateLimitInfo } {
+    return this.checkLimit(identifier, config);
+  }
+
+  /**
+   * Increment counter for identifier
+   */
+  incrementCounter(identifier: string): number {
+    const record = this.records.get(identifier);
+    if (!record) {
+      this.records.set(identifier, {
+        count: 1,
+        firstRequest: Date.now(),
+      });
+      return 1;
+    }
+
+    record.count++;
+    return record.count;
+  }
+
+  /**
+   * Reset counter for identifier
+   */
+  resetCounter(identifier: string): void {
+    this.reset(identifier);
+  }
+
+  /**
+   * Get remaining attempts
+   */
+  getRemainingAttempts(identifier: string, config: RateLimitConfig): number {
+    const info = this.getInfo(identifier, config);
+    return info.remaining;
+  }
+
+  /**
+   * Get reset time
+   */
+  getResetTime(identifier: string, config: RateLimitConfig): number {
+    const info = this.getInfo(identifier, config);
+    return info.resetTime;
+  }
+
+  /**
    * Destroy service (cleanup)
    */
   onModuleDestroy(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
     }
+  }
+}
+
+/**
+ * Rate Limit Rule Manager
+ */
+@Injectable()
+export class RateLimitRuleManager {
+  private rules: Map<string, RateLimitConfig> = new Map();
+
+  /**
+   * Add or update a rule
+   */
+  addRule(name: string, config: RateLimitConfig): void {
+    this.rules.set(name, config);
+  }
+
+  /**
+   * Remove a rule
+   */
+  removeRule(name: string): boolean {
+    return this.rules.delete(name);
+  }
+
+  /**
+   * Update a rule
+   */
+  updateRule(name: string, updates: Partial<RateLimitConfig>): boolean {
+    const existing = this.rules.get(name);
+    if (!existing) {
+      return false;
+    }
+
+    this.rules.set(name, { ...existing, ...updates });
+    return true;
+  }
+
+  /**
+   * Get a rule
+   */
+  getRule(name: string): RateLimitConfig | undefined {
+    return this.rules.get(name);
+  }
+
+  /**
+   * Get all rules
+   */
+  getAllRules(): Map<string, RateLimitConfig> {
+    return new Map(this.rules);
+  }
+
+  /**
+   * Check if rule exists
+   */
+  hasRule(name: string): boolean {
+    return this.rules.has(name);
+  }
+
+  /**
+   * Clear all rules
+   */
+  clearRules(): void {
+    this.rules.clear();
   }
 }
 
