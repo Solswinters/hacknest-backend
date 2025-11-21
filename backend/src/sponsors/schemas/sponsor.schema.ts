@@ -3,15 +3,7 @@ import { Document } from 'mongoose';
 
 export type SponsorDocument = Sponsor & Document;
 
-export enum SponsorTier {
-  PLATINUM = 'platinum',
-  GOLD = 'gold',
-  SILVER = 'silver',
-  BRONZE = 'bronze',
-  COMMUNITY = 'community',
-}
-
-@Schema({ timestamps: true })
+@Schema({ collection: 'sponsors' })
 export class Sponsor {
   @Prop({ required: true })
   name: string;
@@ -19,62 +11,45 @@ export class Sponsor {
   @Prop()
   description?: string;
 
+  @Prop()
+  logoUrl?: string;
+
+  @Prop()
+  websiteUrl?: string;
+
   @Prop({ required: true })
-  walletAddress: string;
-
-  @Prop({ type: String, enum: SponsorTier, default: SponsorTier.COMMUNITY })
-  tier: SponsorTier;
+  contactEmail: string;
 
   @Prop()
-  logo?: string;
+  contactPhone?: string;
 
   @Prop()
-  website?: string;
+  contactName?: string;
 
   @Prop()
-  twitter?: string;
+  tier?: string;
 
-  @Prop()
-  discord?: string;
+  @Prop({ type: Number, default: 0 })
+  amount?: number;
 
   @Prop({ type: [String], default: [] })
-  sponsoredEvents: string[]; // event IDs
-
-  @Prop({ type: Object })
-  contribution?: {
-    amount: string;
-    currency: string;
-    transactionHash?: string;
-  };
-
-  @Prop({ type: [String], default: [] })
-  benefits: string[];
-
-  @Prop({ type: Object })
-  contact?: {
-    name: string;
-    email: string;
-    phone?: string;
-  };
-
-  @Prop({ default: true })
-  isActive: boolean;
-
-  @Prop()
-  startDate?: Date;
-
-  @Prop()
-  endDate?: Date;
+  eventIds: string[];
 
   @Prop({ type: Object })
   metadata?: Record<string, any>;
+
+  @Prop({ type: Date, default: Date.now })
+  createdAt: Date;
+
+  @Prop({ type: Date, default: Date.now })
+  updatedAt: Date;
 }
 
 export const SponsorSchema = SchemaFactory.createForClass(Sponsor);
 
 // Indexes
-SponsorSchema.index({ walletAddress: 1 }, { unique: true });
+SponsorSchema.index({ name: 1 });
+SponsorSchema.index({ contactEmail: 1 });
+SponsorSchema.index({ eventIds: 1 });
 SponsorSchema.index({ tier: 1 });
-SponsorSchema.index({ isActive: 1 });
-SponsorSchema.index({ name: 'text', description: 'text' });
-
+SponsorSchema.index({ createdAt: -1 });
