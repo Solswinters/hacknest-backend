@@ -43,5 +43,13 @@ export class CreateSubmissionDto {
   @IsOptional()
   @IsString()
   ipfsHash?: string;
+
+  @ApiPropertyOptional({
+    example: '0x...',
+    description: 'Transaction hash if submission involved on-chain action',
+  })
+  @IsOptional()
+  @IsString()
+  txHash?: string;
 }
 
