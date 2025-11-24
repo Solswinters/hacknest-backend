@@ -15,8 +15,14 @@ export class UsersService {
    * Find user by wallet address
    */
   async findByAddress(address: string): Promise<UserDocument | null> {
+    if (!address) return null;
     const normalizedAddress = address.toLowerCase();
-    return this.userModel.findOne({ address: normalizedAddress }).exec();
+    try {
+      return await this.userModel.findOne({ address: normalizedAddress }).exec();
+    } catch (error) {
+      this.logger.error(`Error finding user by address ${address}: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   /**
