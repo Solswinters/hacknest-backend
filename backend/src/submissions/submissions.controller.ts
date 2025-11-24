@@ -66,25 +66,30 @@ export class SubmissionsController {
     @Param('eventId') eventId: string,
     @Request() req: any,
   ) {
-    const user = req.user; // May be undefined if not authenticated
-    const submissions = await this.submissionsService.findByEvent(
-      eventId,
-      user?.address,
-      user?.role,
-    );
+    try {
+      const user = req.user; // May be undefined if not authenticated
+      const submissions = await this.submissionsService.findByEvent(
+        eventId,
+        user?.address,
+        user?.role,
+      );
 
-    return {
-      submissions: submissions.map((s) => ({
-        id: s._id,
-        participant: s.participant,
-        title: s.title,
-        repo: s.repo,
-        url: s.url,
-        status: s.status,
-        score: s.score,
-        createdAt: (s as any).createdAt,
-      })),
-    };
+      return {
+        submissions: submissions.map((s) => ({
+          id: s._id,
+          participant: s.participant,
+          title: s.title,
+          repo: s.repo,
+          url: s.url,
+          status: s.status,
+          score: s.score,
+          createdAt: (s as any).createdAt,
+        })),
+      };
+    } catch (error) {
+      // Let global filter handle it, or rethrow specific
+      throw error;
+    }
   }
 }
 
