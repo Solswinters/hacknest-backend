@@ -11,6 +11,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -69,7 +70,16 @@ export class EventsController {
   @ApiOperation({ summary: 'List all events (Public)' })
   @ApiResponse({ status: 200, description: 'Events list returned' })
   async findAll(@Query() listEventsDto: ListEventsDto) {
-    return this.eventsService.findAll(listEventsDto);
+    try {
+      return await this.eventsService.findAll(listEventsDto);
+    } catch (error) {
+      throw new HttpExceptionFilter().catch(error, {
+        switchToHttp: () => ({
+          getRequest: () => ({}),
+          getResponse: () => ({ status: () => ({ json: () => {} }) }),
+        }),
+      } as any);
+    }
   }
 
   @Get(':id')
@@ -79,6 +89,10 @@ export class EventsController {
   @ApiResponse({ status: 404, description: 'Event not found' })
   async findOne(@Param('id') id: string) {
     const event = await this.eventsService.findById(id);
+    
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
     
     return {
       id: event._id,
