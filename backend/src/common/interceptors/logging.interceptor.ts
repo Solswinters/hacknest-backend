@@ -31,6 +31,9 @@ export class LoggingInterceptor implements NestInterceptor {
     const correlationId =
       (headers['x-correlation-id'] as string) ||
       `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    
+    // Attach correlation ID to response header
+    context.switchToHttp().getResponse().setHeader('x-correlation-id', correlationId);
 
     // Build request log
     const requestLog: RequestLog = {
