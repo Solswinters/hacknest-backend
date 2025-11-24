@@ -21,7 +21,7 @@ import { TrackEventDto, AnalyticsFilterDto } from '../dto/analytics.dto';
 export class AnalyticsController {
   private readonly logger = new Logger(AnalyticsController.name);
 
-  constructor(private readonly analyticsService: AnalyticsService) {}
+  constructor(private readonly analyticsService: AnalyticsService) { }
 
   /**
    * Track an analytics event
@@ -29,7 +29,7 @@ export class AnalyticsController {
   @Post('track')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Track an analytics event' }}
+  @ApiOperation({ summary: 'Track an analytics event' })
   @ApiResponse({ status: 201, description: 'Event tracked successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -112,7 +112,7 @@ export class AnalyticsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get event analytics' })
   @ApiResponse({ status: 200, description: 'Event analytics retrieved successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' }}
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   async getEventAnalytics(@Query('eventId') eventId?: string, @Query('days') days = 30) {
     try {
@@ -348,7 +348,7 @@ export class AnalyticsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get custom analytics query' }}
+  @ApiOperation({ summary: 'Get custom analytics query' })
   @ApiResponse({ status: 200, description: 'Query results retrieved successfully' })
   @ApiResponse({ status: 400, description: 'Invalid query' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
