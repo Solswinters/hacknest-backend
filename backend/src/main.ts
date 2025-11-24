@@ -17,6 +17,9 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Enable graceful shutdown hooks
+  app.enableShutdownHooks();
+
   // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
