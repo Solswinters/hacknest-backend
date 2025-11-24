@@ -1322,3 +1322,4 @@ export const CONTRACT_CONFIG = {
   blockExplorer: `https://basescan.org/address/${PRIZE_POOL_ESCROW_ADDRESS}`
 } as const;
 
+
