@@ -36,8 +36,12 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Nonce issued successfully' })
   @ApiResponse({ status: 400, description: 'Invalid address' })
   async getNonce(@Query('address') address: string) {
-    if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
-      throw new BadRequestException('Invalid Ethereum address');
+    if (!address) {
+      throw new BadRequestException('Address is required');
+    }
+    
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      throw new BadRequestException('Invalid Ethereum address format');
     }
 
     const { nonce, expiresAt } = await this.authService.issueNonce(address);
