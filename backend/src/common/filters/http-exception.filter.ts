@@ -62,6 +62,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     }
 
+    // Sanitize message for security
+    const sanitizedMessage = this.sanitizeMessage(message);
+
     // Generate correlation ID for tracking
     const correlationId =
       (request.headers['x-correlation-id'] as string) ||
@@ -69,7 +72,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     // Log error details with correlation ID
     this.logger.error(
-      `[${correlationId}] ${request.method} ${request.url} - Status: ${status} - Message: ${JSON.stringify(message)}`,
+      `[${correlationId}] ${request.method} ${request.url} - Status: ${status} - Message: ${JSON.stringify(sanitizedMessage)}`,
       exception instanceof Error ? exception.stack : '',
     );
 
@@ -77,7 +80,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const errorResponse: ErrorResponse = {
       statusCode: status,
       error,
-      message,
+      message: sanitizedMessage,
       timestamp: new Date().toISOString(),
       path: request.url,
       method: request.method,
