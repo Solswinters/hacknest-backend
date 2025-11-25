@@ -478,3 +478,24 @@ src/
 ├── utils/          # Helper functions
 └── middleware/     # Express middleware
 ```
+## Testing Strategy
+
+### Test Coverage
+- Unit tests for business logic
+- Integration tests for API endpoints
+- End-to-end tests for critical flows
+- Performance tests for scalability
+
+### Running Tests
+```bash
+npm run test          # Run all tests
+npm run test:unit     # Unit tests only
+npm run test:integration  # Integration tests
+npm run test:coverage # Coverage report
+```
+
+### Test Structure
+- AAA pattern (Arrange, Act, Assert)
+- Mocking external dependencies
+- Test fixtures and factories
+- Snapshot testing where appropriate
