@@ -29,7 +29,7 @@ export class JudgingController {
   @ApiParam({ name: 'eventId', description: 'Event ID' })
   @ApiParam({ name: 'submissionId', description: 'Submission ID' })
   @ApiResponse({ status: 200, description: 'Submission scored successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid input' })
+  @ApiResponse({ status: 400, description: 'Invalid score or input' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden - Judge role required' })
   @ApiResponse({ status: 404, description: 'Submission not found' })
@@ -45,6 +45,11 @@ export class JudgingController {
       userAddress,
       scoreDto,
     );
+
+    if (!submission) {
+      // Service might return null if logic fails silently, ensuring 404 here
+      throw new NotFoundException('Submission not found or could not be scored');
+    }
 
     return {
       success: true,
