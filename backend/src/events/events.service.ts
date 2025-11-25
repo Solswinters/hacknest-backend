@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+
 import { Model } from 'mongoose';
-import { Event, EventDocument, EventStatus } from './schemas/event.schema';
+
 import { CreateEventDto } from './dto/create-event.dto';
-import { UpdateEventDto } from './dto/update-event.dto';
+import { Event, EventDocument, EventStatus } from './schemas/event.schema';
 import { ListEventsDto } from './dto/list-events.dto';
+import { UpdateEventDto } from './dto/update-event.dto';
 
 @Injectable()
 export class EventsService {
