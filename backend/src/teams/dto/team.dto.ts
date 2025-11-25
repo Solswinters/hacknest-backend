@@ -1,5 +1,6 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, IsMongoId, IsInt, Min, Max } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+import { IsString, IsNotEmpty, IsOptional, IsArray, IsMongoId, IsInt, Min, Max } from 'class-validator';
 
 export class CreateTeamDto {
   @ApiProperty({ description: 'Team name' })
