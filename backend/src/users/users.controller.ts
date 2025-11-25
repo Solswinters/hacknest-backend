@@ -1,7 +1,7 @@
-import { Controller, Get, UseGuards, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Controller, Get, UseGuards, NotFoundException } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
 
 @ApiTags('users')
