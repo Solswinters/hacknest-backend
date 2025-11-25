@@ -1,5 +1,6 @@
-import { ethers } from 'ethers';
 import { Logger } from '@nestjs/common';
+
+import { ethers } from 'ethers';
 
 const logger = new Logger('SubmissionSignatureVerifier');
 
