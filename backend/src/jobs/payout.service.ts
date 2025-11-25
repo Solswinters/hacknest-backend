@@ -1,8 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Injectable, Logger } from '@nestjs/common';
+
 import { Model, Types } from 'mongoose';
-import { Job, JobDocument, JobType, JobStatus } from './schemas/job.schema';
+
 import { ContractService } from '../web3/contract.service';
+import { Job, JobDocument, JobType, JobStatus } from './schemas/job.schema';
 
 interface PayoutRetryConfig {
   maxRetries: number;
