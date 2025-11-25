@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { IsString, IsNotEmpty, IsOptional, IsEnum, IsArray, IsMongoId, IsBoolean } from 'class-validator';
 
 export enum NotificationType {
