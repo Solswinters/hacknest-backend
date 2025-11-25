@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ethers } from 'ethers';
+import { Injectable, Logger } from '@nestjs/common';
+
 import {
+import { ethers } from 'ethers';
+
   EVENT_FACTORY_ABI,
   EVENT_INSTANCE_ABI,
   CreateEventParams,
