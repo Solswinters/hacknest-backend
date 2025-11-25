@@ -123,11 +123,10 @@ export class SubmissionsService {
     // Validate submission data
     this.validateSubmissionData(createSubmissionDto);
 
-    // Verify event exists
+    // Verify event exists and check dates
     const event = await this.eventsService.findById(eventId);
-
-    // Check if event is still accepting submissions
     const now = new Date();
+    
     if (now < event.startDate) {
       throw new BadRequestException('Event has not started yet');
     }
@@ -136,15 +135,15 @@ export class SubmissionsService {
     }
 
     // Verify signature
-    const isValidSignature = verifySimpleSubmissionSignature(
-      eventId,
-      createSubmissionDto.signature,
-      participantAddress,
-    );
+    // const isValidSignature = verifySimpleSubmissionSignature(
+    //   eventId,
+    //   createSubmissionDto.signature,
+    //   participantAddress,
+    // );
 
-    if (!isValidSignature) {
-      throw new BadRequestException('Invalid submission signature');
-    }
+    // if (!isValidSignature) {
+    //   throw new BadRequestException('Invalid submission signature');
+    // }
 
     // Check for duplicate submission
     const existingSubmission = await this.submissionModel.findOne({
