@@ -1,9 +1,10 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+
+import * as SMTPTransport from 'nodemailer/lib/smtp-transport';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
-import * as SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 export interface MailConfig {
   host: string;
