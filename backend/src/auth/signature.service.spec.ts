@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { SignatureService } from './signature.service';
-import { Nonce } from './schemas/nonce.schema';
+
 import { ethers } from 'ethers';
+
+import { Nonce } from './schemas/nonce.schema';
+import { SignatureService } from './signature.service';
 
 describe('SignatureService', () => {
   let service: SignatureService;
