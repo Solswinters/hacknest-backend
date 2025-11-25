@@ -1,10 +1,12 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+
 import { Model } from 'mongoose';
 import { ethers } from 'ethers';
-import { ConfigService } from '@nestjs/config';
-import { WalletConfig, WalletConfigDocument } from './schemas/wallet-config.schema';
+
 import { EncryptionService } from './encryption.service';
+import { WalletConfig, WalletConfigDocument } from './schemas/wallet-config.schema';
 
 /**
  * Secure wallet manager
