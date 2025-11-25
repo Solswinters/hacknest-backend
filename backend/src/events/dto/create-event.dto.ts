@@ -7,6 +7,7 @@ import {
   Matches,
   IsArray,
   ArrayNotEmpty,
+  IsOptional,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { RewardCurrency } from '../schemas/event.schema';
@@ -71,5 +72,15 @@ export class CreateEventDto {
     message: 'Each judge address must be a valid Ethereum address',
   })
   judges: string[];
+
+  @ApiProperty({
+    example: 'https://hackathon-banner.com/image.png',
+    description: 'Event banner image URL',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  @Matches(/^https?:\/\/.+/, { message: 'Banner must be a valid URL' })
+  bannerUrl?: string;
 }
 
