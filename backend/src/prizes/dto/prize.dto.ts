@@ -1,5 +1,6 @@
-import { IsString, IsNotEmpty, IsOptional, IsMongoId, IsNumber, Min, IsEnum, IsEthereumAddress } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+import { IsString, IsNotEmpty, IsOptional, IsMongoId, IsNumber, Min, IsEnum, IsEthereumAddress } from 'class-validator';
 
 export enum PrizeStatus {
   AVAILABLE = 'available',
