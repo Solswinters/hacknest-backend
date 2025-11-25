@@ -1,5 +1,6 @@
-import { IsString, IsEthereumAddress, Matches, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+import { IsString, IsEthereumAddress, Matches, IsOptional } from 'class-validator';
 
 export class RecordDepositDto {
   @ApiProperty({ description: 'Sender wallet address' })
