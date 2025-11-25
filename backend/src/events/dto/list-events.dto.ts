@@ -1,6 +1,8 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
 import { IsOptional, IsEnum, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+
 import { EventStatus } from '../schemas/event.schema';
 
 export class ListEventsDto {
