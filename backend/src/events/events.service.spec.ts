@@ -1,8 +1,8 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { EventsService } from './events.service';
 import { Event } from './schemas/event.schema';
+import { EventsService } from './events.service';
 
 describe('EventsService - Judge Management', () => {
   let service: EventsService;
