@@ -1,9 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
-import { UsersService } from '../src/users/users.service';
 import { EventsService } from '../src/events/events.service';
-import { UserRole } from '../src/users/schemas/user.schema';
 import { RewardCurrency } from '../src/events/schemas/event.schema';
+import { UserRole } from '../src/users/schemas/user.schema';
+import { UsersService } from '../src/users/users.service';
 
 async function bootstrap() {
   console.log('🌱 Starting database seeding...\n');
