@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { IsOptional, IsString, IsMongoId, IsDate, IsEnum } from 'class-validator';
 
 export enum ActivityAction {
