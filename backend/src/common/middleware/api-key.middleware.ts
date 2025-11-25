@@ -1,6 +1,7 @@
-import { Injectable, NestMiddleware, UnauthorizedException, Logger } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { Injectable, NestMiddleware, UnauthorizedException, Logger } from '@nestjs/common';
+
+import { Request, Response, NextFunction } from 'express';
 
 @Injectable()
 export class ApiKeyMiddleware implements NestMiddleware {
