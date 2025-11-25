@@ -1,9 +1,9 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { JwtPayload } from './strategies/jwt.strategy';
+import { LoginDto } from './dto/login.dto';
 import { SignatureService } from './signature.service';
 import { UsersService } from '../users/users.service';
-import { LoginDto } from './dto/login.dto';
-import { JwtPayload } from './strategies/jwt.strategy';
 
 export interface LoginResponse {
   token: string;
