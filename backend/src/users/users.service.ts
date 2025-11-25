@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+
 import { Model } from 'mongoose';
+
 import { User, UserDocument, UserRole } from './schemas/user.schema';
 
 @Injectable()
