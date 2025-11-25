@@ -1,15 +1,15 @@
-import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
+import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { SignatureService } from './signature.service';
-import { WalletConnectService } from './walletconnect.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { Nonce, NonceSchema } from './schemas/nonce.schema';
+import { SignatureService } from './signature.service';
 import { UsersModule } from '../users/users.module';
+import { WalletConnectService } from './walletconnect.service';
 
 @Module({
   imports: [
