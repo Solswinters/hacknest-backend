@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Injectable, Logger } from '@nestjs/common';
+
 import { Model } from 'mongoose';
+
 import { ActivityLog, ActivityLogDocument } from '../../common/schemas/activity-log.schema';
 
 export interface CreateActivityDto {
