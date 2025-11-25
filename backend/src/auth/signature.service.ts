@@ -1,8 +1,10 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+
+import * as crypto from 'crypto';
 import { Model } from 'mongoose';
 import { ethers } from 'ethers';
-import * as crypto from 'crypto';
+
 import { Nonce, NonceDocument } from './schemas/nonce.schema';
 
 @Injectable()
