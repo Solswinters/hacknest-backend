@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+
 import { isAddress } from 'ethers/lib/utils';
 
 export interface ValidationRule {
