@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Injectable, Logger } from '@nestjs/common';
+
 import { Model } from 'mongoose';
+
 import { Notification, NotificationDocument } from '../schemas/notification.schema';
 
 export interface SendEmailDto {
