@@ -1,8 +1,10 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+
+import {
 import { Model, Types } from 'mongoose';
 import { ethers } from 'ethers';
-import {
+
   WalletTransaction,
   WalletTransactionDocument,
   TransactionType,
