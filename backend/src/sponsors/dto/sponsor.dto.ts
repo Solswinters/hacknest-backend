@@ -1,5 +1,6 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, IsUrl, IsEmail, IsNumber, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+import { IsString, IsNotEmpty, IsOptional, IsArray, IsUrl, IsEmail, IsNumber, Min } from 'class-validator';
 
 export class CreateSponsorDto {
   @ApiProperty({ description: 'Name of the sponsor organization' })
