@@ -1,5 +1,7 @@
-import { IsEnum, IsOptional, IsNumber, Min, Max } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+import { IsEnum, IsOptional, IsNumber, Min, Max } from 'class-validator';
+
 import { SubmissionStatus } from '../../submissions/schemas/submission.schema';
 
 export class ScoreSubmissionDto {
