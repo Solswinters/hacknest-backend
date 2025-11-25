@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { WalletConfig, WalletConfigSchema } from './schemas/wallet-config.schema';
+
 import {
+
+import { WalletConfig, WalletConfigSchema } from './schemas/wallet-config.schema';
+
   WalletTransaction,
   WalletTransactionSchema,
 } from './schemas/wallet-transaction.schema';
