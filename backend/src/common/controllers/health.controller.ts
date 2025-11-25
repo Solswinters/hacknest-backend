@@ -1,8 +1,9 @@
-import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { InjectConnection } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
+import { Controller, Get } from '@nestjs/common';
+import { InjectConnection } from '@nestjs/mongoose';
+
+import { Connection } from 'mongoose';
 
 @ApiTags('health')
 @Controller('health')
