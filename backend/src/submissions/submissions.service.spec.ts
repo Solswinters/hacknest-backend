@@ -1,9 +1,9 @@
+import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { SubmissionsService } from './submissions.service';
-import { Submission, SubmissionStatus } from './schemas/submission.schema';
 import { EventsService } from '../events/events.service';
-import { BadRequestException } from '@nestjs/common';
+import { Submission, SubmissionStatus } from './schemas/submission.schema';
+import { SubmissionsService } from './submissions.service';
 
 describe('SubmissionsService', () => {
   let service: SubmissionsService;
